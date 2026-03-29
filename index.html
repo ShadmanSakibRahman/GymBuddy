@@ -759,7 +759,7 @@ auth.onAuthStateChanged(user=>{
     } else {av.textContent=uName[0].toUpperCase();av.title=uName}
     document.getElementById('userAvatar').addEventListener('click',()=>{showModal('Sign Out','Signed in as '+esc(uName)+'. Sign out?',()=>auth.signOut())});
     loadFromFirebase();
-  }else{if(userRef)userRef.off();currentUser=null;userRef=null;document.getElementById('loginScreen').classList.remove('out');document.getElementById('mainApp').classList.remove('on');document.getElementById('bottomBar').style.display='none'}
+  }else{currentUser=null;userRef=null;document.getElementById('loginScreen').classList.remove('out');document.getElementById('mainApp').classList.remove('on');document.getElementById('bottomBar').style.display='none'}
 });
 
 // ═══ SYNC ═══
@@ -780,20 +780,6 @@ function loadFromFirebase(){
       state=fb;
     }
     initSession();saveState();render();setSync('ok');
-    // Listen for real-time changes from other devices
-    let _ignoreNext=true; // Skip the first fire (it's our own data)
-    userRef.on('value',snap=>{
-      if(_ignoreNext){_ignoreNext=false;return}
-      if(_isSaving)return; // Don't react to our own writes
-      const d=snap.val();
-      if(!d)return;
-      const currentKey=state.todaySession;
-      state=d;if(!state.sessions)state.sessions={};if(!state.cycleCount)state.cycleCount=1;if(!state.customWorkouts)state.customWorkouts={};
-      state.todaySession=currentKey;
-      initSession();
-      localStorage.setItem('gb_data',JSON.stringify(state));
-      render();setSync('ok');
-    });
   }).catch(()=>{setSync('off')});
 }
 function hideLoading(){
@@ -801,13 +787,13 @@ function hideLoading(){
   document.getElementById('cycleBar').style.display='';
   document.querySelectorAll('.tabs').forEach(t=>t.style.display='');
 }
-let _saveTimer=null,_isSaving=false;
+let _saveTimer=null;
 function saveState(){
   localStorage.setItem('gb_data',JSON.stringify(state));
   if(guestMode)return;
   if(userRef){
     clearTimeout(_saveTimer);
-    _saveTimer=setTimeout(()=>{_isSaving=true;setSync('s');userRef.set(state).then(()=>{_isSaving=false;setSync('ok')}).catch(()=>{_isSaving=false;setSync('off')})},1000);
+    _saveTimer=setTimeout(()=>{setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'))},1000);
   }
 }
 function loadLocal(){
