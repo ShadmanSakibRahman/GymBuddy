@@ -962,6 +962,16 @@ function renderWorkout(){
     ex.completed=!ex.completed;
     card.classList.toggle('done',ex.completed);
     if(ex.completed){
+      // Fill empty sets with placeholder values
+      const inputs=card.querySelectorAll('.ex-sets input');
+      inputs.forEach(inp=>{
+        if(!inp.value&&inp.placeholder&&inp.placeholder!==''){
+          const si=parseInt(inp.dataset.si),f=inp.dataset.f;
+          inp.value=inp.placeholder;
+          if(f==='w')ex.sets[si].weight=inp.placeholder;
+          if(f==='r')ex.sets[si].reps=inp.placeholder;
+        }
+      });
       const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
       svg.setAttribute('width','14');svg.setAttribute('height','14');svg.setAttribute('viewBox','0 0 24 24');
       svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','3');
