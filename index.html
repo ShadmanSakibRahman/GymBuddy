@@ -685,17 +685,21 @@ const auth=firebase.auth(),db=firebase.database();
 let currentUser=null,userRef=null,guestMode=false;
 
 // ═══ AUTH ═══
+// Handle redirect result on page load (for mobile Google sign-in)
+auth.getRedirectResult().catch(()=>{});
+
 document.getElementById('googleLoginBtn').addEventListener('click',async()=>{
   const p=new firebase.auth.GoogleAuthProvider();
-  const isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
   showLoginLoading(true);
-  if(isMobile){
-    // Mobile: use popup first, it works on most browsers
-    try{await auth.signInWithPopup(p)}
-    catch(e){showLoginError('Google sign-in failed. Try email instead.');showLoginLoading(false)}
-  } else {
-    try{await auth.signInWithPopup(p)}
-    catch(e){showLoginError(e.code==='auth/popup-blocked'?'Popup blocked. Allow popups and try again.':'Sign-in failed. Try email instead.');showLoginLoading(false)}
+  try{await auth.signInWithPopup(p)}
+  catch(e){
+    // Popup failed — try redirect on mobile, show error on desktop
+    if(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)){
+      try{auth.signInWithRedirect(p)}catch(e2){showLoginError('Sign-in failed. Try email instead.');showLoginLoading(false)}
+    } else {
+      showLoginError(e.code==='auth/popup-blocked'?'Allow popups and try again.':'Sign-in failed. Try email instead.');
+      showLoginLoading(false);
+    }
   }
 });
 let isSignUp=false;
