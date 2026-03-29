@@ -687,10 +687,15 @@ let currentUser=null,userRef=null,guestMode=false;
 // ═══ AUTH ═══
 document.getElementById('googleLoginBtn').addEventListener('click',async()=>{
   const p=new firebase.auth.GoogleAuthProvider();
-  try{showLoginLoading(true);await auth.signInWithPopup(p)}
-  catch(e){
-    if(e.code==='auth/popup-blocked'||e.code==='auth/cancelled-popup-request')await auth.signInWithRedirect(p);
-    else showLoginError(e.message);showLoginLoading(false);
+  const isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  showLoginLoading(true);
+  if(isMobile){
+    // Mobile: use popup first, it works on most browsers
+    try{await auth.signInWithPopup(p)}
+    catch(e){showLoginError('Google sign-in failed. Try email instead.');showLoginLoading(false)}
+  } else {
+    try{await auth.signInWithPopup(p)}
+    catch(e){showLoginError(e.code==='auth/popup-blocked'?'Popup blocked. Allow popups and try again.':'Sign-in failed. Try email instead.');showLoginLoading(false)}
   }
 });
 let isSignUp=false;
