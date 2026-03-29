@@ -782,14 +782,20 @@ function hideLoading(){
   document.querySelectorAll('.tabs').forEach(t=>t.style.display='');
 }
 let _saveTimer=null;
-function saveState(){
+function saveState(immediate){
   localStorage.setItem('gb_data',JSON.stringify(state));
   if(guestMode)return;
   if(userRef){
     clearTimeout(_saveTimer);
-    _saveTimer=setTimeout(()=>{setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'))},1000);
+    if(immediate){
+      setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'));
+    } else {
+      _saveTimer=setTimeout(()=>{setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'))},1000);
+    }
   }
 }
+// Flush pending saves when user leaves page
+window.addEventListener('beforeunload',()=>{if(_saveTimer){clearTimeout(_saveTimer);if(userRef&&!guestMode){userRef.set(state)}}})
 function loadLocal(){
   try{const r=localStorage.getItem('gb_data');if(r){const s=JSON.parse(r);if(!s.sessions)s.sessions={};if(!s.cycleCount)s.cycleCount=1;if(!s.customWorkouts)s.customWorkouts={};return s}}catch(e){}
   return defState();
@@ -851,7 +857,7 @@ function renderCycle(){
     const isRest=c.type==='rest';
     return`<div class="cd ${isRest?'rest':''} ${on}" data-day="${c.day}"><span class="n">${c.day}</span><span class="l">${isRest?'REST':c.type.slice(0,3).toUpperCase()}</span></div>`;
   }).join('');
-  bar.querySelectorAll('.cd').forEach(el=>{el.addEventListener('click',()=>{cleanGhostSession();state.currentCycleDay=parseInt(el.dataset.day);initSession();saveState();render()})});
+  bar.querySelectorAll('.cd').forEach(el=>{el.addEventListener('click',()=>{cleanGhostSession();state.currentCycleDay=parseInt(el.dataset.day);initSession();saveState(true);render()})});
 }
 
 // ═══ SESSION ═══
@@ -930,7 +936,7 @@ function renderWorkout(){
 
   const list=document.getElementById('exerciseList'),sess=state.sessions[state.todaySession],ls=lastSession(state.currentCycleDay);
   if(!sess||!sess.exercises.length){list.innerHTML=`<div class="empty"><div class="ico"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg></div><p>Rest day &mdash; or add exercises with the edit button above.</p><button class="skip-rest-btn" id="skipRestBtn">Skip to next day</button></div>`;document.getElementById('bottomBar').style.display='none';
-    document.getElementById('skipRestBtn').addEventListener('click',()=>{cleanGhostSession();const next=state.currentCycleDay>=7?1:state.currentCycleDay+1;if(next===1)state.cycleCount=(state.cycleCount||1)+1;state.currentCycleDay=next;initSession();saveState();render()});
+    document.getElementById('skipRestBtn').addEventListener('click',()=>{cleanGhostSession();const next=state.currentCycleDay>=7?1:state.currentCycleDay+1;if(next===1)state.cycleCount=(state.cycleCount||1)+1;state.currentCycleDay=next;initSession();saveState(true);render()});
     return}
   document.getElementById('bottomBar').style.display='block';
 
@@ -995,7 +1001,7 @@ function renderWorkout(){
       pl.setAttribute('points','20 6 9 17 4 12');svg.appendChild(pl);
       b.textContent='';b.appendChild(svg);
     } else {b.textContent=''}
-    saveState();
+    saveState(true);
   })});
   let dt;list.querySelectorAll('.ex-sets input').forEach(inp=>{inp.addEventListener('input',()=>{
     const i=parseInt(inp.dataset.i),si=parseInt(inp.dataset.si),f=inp.dataset.f;
@@ -1038,7 +1044,7 @@ function renderHistory(){
         return`<div class="h-ex"><span class="nm">${esc(e.name)}</span><span class="st">${e.loggedWeight||'-'}x${e.loggedReps||'-'} ${e.unit||''}</span></div>`;
       }).join('')}</div></div>`;
   }).join('');
-  p.querySelectorAll('.del-btn').forEach(b=>{b.addEventListener('click',()=>{showModal('Delete Session','Delete this session permanently?',()=>{delete state.sessions[b.dataset.k];saveState();renderHistory();renderWorkout()})})});
+  p.querySelectorAll('.del-btn').forEach(b=>{b.addEventListener('click',()=>{showModal('Delete Session','Delete this session permanently?',()=>{delete state.sessions[b.dataset.k];saveState(true);renderHistory();renderWorkout()})})});
   p.querySelectorAll('.h-edit-btn').forEach(b=>{b.addEventListener('click',()=>{
     // Cancel any other open edit — re-render first, then re-click this button
     let hasOtherEdit=false;
@@ -1065,7 +1071,7 @@ function renderHistory(){
           s.exercises[oi].loggedWeight=w;s.exercises[oi].loggedReps=r;
         }
       });
-      saveState();b.textContent='Edit';renderHistory();renderWorkout();showToast('Session updated!');return;
+      saveState(true);b.textContent='Edit';renderHistory();renderWorkout();showToast('Session updated!');return;
     }
     b.textContent='Save';
     c.innerHTML=comp.map(e=>{
@@ -1136,14 +1142,14 @@ document.getElementById('saveBtn').addEventListener('click',()=>{
   const next=state.currentCycleDay>=7?1:state.currentCycleDay+1;
   if(next===1)state.cycleCount=(state.cycleCount||1)+1;
   state.currentCycleDay=next;
-  initSession();saveState();
+  initSession();saveState(true);
   const btn=document.getElementById('saveBtn');btn.textContent='SESSION LOGGED \u2713';btn.classList.add('saved');
   showToast(`Logged! ${cnt}/${sess.exercises.length} exercises`);
   setTimeout(()=>{btn.textContent='LOG SESSION';btn.classList.remove('saved');render()},2000);
 });
 
 // ═══ RESET ═══
-document.getElementById('resetBtn').addEventListener('click',()=>{showModal('Reset Session','Reset all checkmarks and values?',()=>{delete state.sessions[state.todaySession];initSession();saveState();render();showToast('Session reset')})});
+document.getElementById('resetBtn').addEventListener('click',()=>{showModal('Reset Session','Reset all checkmarks and values?',()=>{delete state.sessions[state.todaySession];initSession();saveState(true);render();showToast('Session reset')})});
 
 // ═══ EDIT PANEL ═══
 let editingDay=null;
@@ -1177,7 +1183,7 @@ function renderEditExercises(){
     const j=dir==='up'?i-1:i+1;
     if(j<0||j>=list.length)return;
     [list[i],list[j]]=[list[j],list[i]];
-    state.customWorkouts[editingDay]=list;saveState();renderEditExercises();
+    state.customWorkouts[editingDay]=list;saveState(true);renderEditExercises();
     // Scroll to the moved exercise's new position
     const cards=document.getElementById('editContent').querySelectorAll('.edit-ex');
     if(cards[j])cards[j].scrollIntoView({behavior:'smooth',block:'center'});
@@ -1186,13 +1192,13 @@ function renderEditExercises(){
   c.querySelectorAll('.edit-ex-del').forEach(b=>{b.addEventListener('click',()=>{
     const i=parseInt(b.dataset.i),exs=getWorkouts(editingDay);
     if(exs.length<=1){document.getElementById('editErr').textContent='Add another exercise first.';return}
-    showModal('Delete Exercise',`Remove this exercise?`,()=>{if(!state.customWorkouts)state.customWorkouts={};const list=[...getWorkouts(editingDay)];list.splice(i,1);state.customWorkouts[editingDay]=list;saveState();renderEditExercises()});
+    showModal('Delete Exercise',`Remove this exercise?`,()=>{if(!state.customWorkouts)state.customWorkouts={};const list=[...getWorkouts(editingDay)];list.splice(i,1);state.customWorkouts[editingDay]=list;saveState(true);renderEditExercises()});
   })});
 }
 document.getElementById('editAdd').addEventListener('click',()=>{
   if(!state.customWorkouts)state.customWorkouts={};const list=[...getWorkouts(editingDay)];
   list.push({n:"New Exercise",s:3,r:"8-12",rest:"60s",w:0,u:"kg",p:""});
-  state.customWorkouts[editingDay]=list;saveState();renderEditExercises();
+  state.customWorkouts[editingDay]=list;saveState(true);renderEditExercises();
   document.getElementById('editPanel').scrollTop=document.getElementById('editPanel').scrollHeight;
 });
 document.getElementById('editSave').addEventListener('click',()=>{
@@ -1210,7 +1216,7 @@ document.getElementById('editSave').addEventListener('click',()=>{
   });
   if(hasErr){errEl.textContent='Fix errors above.';return}
   if(!state.customWorkouts)state.customWorkouts={};state.customWorkouts[editingDay]=newList;
-  mergeSessionWithPlan(editingDay);saveState();initSession();render();closeEditPanel();showToast('Workout updated!');
+  mergeSessionWithPlan(editingDay);saveState(true);initSession();render();closeEditPanel();showToast('Workout updated!');
 });
 function addErrMsg(inp,msg){const el=document.createElement('div');el.className='err-msg';el.textContent=msg;inp.parentElement.appendChild(el)}
 
