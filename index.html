@@ -137,6 +137,15 @@ body::after{
 /* ═══ APP ═══ */
 .app{position:relative;z-index:2;max-width:500px;margin:0 auto;padding:0 16px 40px;display:none}
 .app.on{display:block;animation:appIn .7s cubic-bezier(.4,0,.2,1) both}
+.app-loading{
+  display:flex;align-items:center;justify-content:center;
+  padding:80px 20px;color:var(--text3);font-size:14px;
+}
+.app-loading .spinner{
+  width:20px;height:20px;border:2px solid var(--text3);border-top-color:var(--accent);
+  border-radius:50%;animation:spin .8s linear infinite;margin-right:10px;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
 @keyframes appIn{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
 
 /* ═══ HEADER ═══ */
@@ -607,6 +616,7 @@ body::after{
     <button data-tab="progress">Progress</button>
     <button data-tab="rules">Rules</button>
   </nav>
+  <div class="app-loading" id="appLoading"><div class="spinner"></div>Loading your workouts...</div>
   <div class="cycle" id="cycleBar"></div>
   <div id="workoutTab">
     <div class="banner" id="dayBanner"></div>
@@ -693,7 +703,7 @@ document.getElementById('guestBtn').addEventListener('click',()=>{
     guestMode=false;document.getElementById('loginScreen').classList.remove('out');document.getElementById('mainApp').classList.remove('on');
   })});
   document.getElementById('syncDot').style.display='none';
-  state=loadLocal();initSession();saveState();render();
+  state=loadLocal();initSession();saveState();render();hideLoading();
 });
 
 function showLoginError(m){document.getElementById('loginError').textContent=m}
@@ -729,8 +739,13 @@ function loadFromFirebase(){
     else state=defState();
     // Merge any local guest sessions into Firebase data
     if(localData&&localData.sessions){Object.keys(localData.sessions).forEach(k=>{if(!state.sessions[k])state.sessions[k]=localData.sessions[k]})}
-    initSession();saveState();render();setSync('ok');
-  }).catch(()=>{state=loadLocal();initSession();render();setSync('off')});
+    initSession();saveState();render();setSync('ok');hideLoading();
+  }).catch(()=>{state=loadLocal();initSession();render();setSync('off');hideLoading()});
+}
+function hideLoading(){
+  const el=document.getElementById('appLoading');if(el)el.style.display='none';
+  document.getElementById('cycleBar').style.display='';
+  document.querySelectorAll('.tabs').forEach(t=>t.style.display='');
 }
 let _saveTimer=null;
 function saveState(){
