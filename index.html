@@ -946,14 +946,7 @@ function renderWorkout(){
     if(!ex.sets){const ns=ex.targetSets||1;ex.sets=[];for(let si=0;si<ns;si++)ex.sets.push({weight:ex.loggedWeight||'',reps:ex.loggedReps||''})}
     // Last session reference
     let li='';
-    if(has&&le.sets){
-      const lastSets=le.sets.filter(s=>s.weight||s.reps).map((s,si)=>`S${si+1}: ${s.weight||'-'}${le.unit!=='BW'&&s.weight?' '+ex.unit:''} x ${s.reps||'-'}`);
-      if(lastSets.length)li=`<div class="ex-last">${lastDate}: ${lastSets.join(' | ')}</div>`;
-      else li=`<div class="ex-last">${lastDate}: completed</div>`;
-    } else if(has){
-      const pts=[];if(le.loggedWeight)pts.push(le.loggedWeight);if(le.loggedReps)pts.push(le.loggedReps+' reps');
-      if(pts.length)li=`<div class="ex-last">${lastDate}: ${pts.join(' x ')}</div>`;
-    }
+    if(has){li=`<div class="ex-last">Last session: ${lastDate}</div>`}
     // Per-set inputs
     const numSets=ex.sets.length;
     let setsHtml='';
