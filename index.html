@@ -959,6 +959,12 @@ function renderWorkout(){
     const i=parseInt(inp.dataset.i),si=parseInt(inp.dataset.si),f=inp.dataset.f;
     if(f==='w')sess.exercises[i].sets[si].weight=inp.value;
     if(f==='r')sess.exercises[i].sets[si].reps=inp.value;
+    // Auto-tick when all reps fields are filled
+    const ex=sess.exercises[i];
+    const allRepsFilled=ex.sets.every(s=>s.reps&&s.reps.trim()!=='');
+    if(allRepsFilled&&!ex.completed){ex.completed=true;renderWorkout()}
+    // Auto-untick if all reps are cleared
+    if(ex.completed&&ex.sets.every(s=>!s.reps||s.reps.trim()==='')){ex.completed=false;renderWorkout()}
     clearTimeout(dt);dt=setTimeout(()=>saveState(),800);
   })});
 }
