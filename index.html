@@ -309,9 +309,7 @@ body::after{
 .ex-sets-hdr{display:grid;grid-template-columns:24px 1fr 1fr;gap:6px;margin-bottom:4px}
 .sets-lbl{font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;font-weight:600;padding-left:2px}
 .ex-set-row{display:grid;grid-template-columns:24px 1fr 1fr;gap:6px;margin-bottom:4px;align-items:center}
-.set-num{font-size:10px;color:var(--text3);font-weight:700;text-align:center;line-height:1.2}
-.set-last{display:block;font-size:8px;font-weight:500;color:var(--blue);opacity:0.8;white-space:nowrap}
-.sets-last-date{font-size:8px;color:var(--blue);font-weight:600}
+.set-num{font-size:10px;color:var(--text3);font-weight:700;text-align:center}
 .inp-g label{
   display:block;font-size:9px;color:var(--text3);
   text-transform:uppercase;letter-spacing:.8px;margin-bottom:4px;font-weight:700;
@@ -955,11 +953,9 @@ function renderWorkout(){
         const lastSet=has&&le.sets&&le.sets[si]?le.sets[si]:null;
         const wPh=lastSet&&lastSet.weight?lastSet.weight:(ex.startWeight||'BW');
         const rPh=lastSet&&lastSet.reps?lastSet.reps:ex.targetReps;
-        const lastLabel=lastSet&&(lastSet.weight||lastSet.reps)?`<span class="set-last">${lastSet.weight||'-'} x ${lastSet.reps||'-'}</span>`:'';
-        return`<div class="ex-set-row"><span class="set-num">S${si+1}${lastLabel}</span><div class="inp-g"><input type="number" inputmode="decimal" placeholder="${wPh}" value="${s.weight}" data-i="${i}" data-si="${si}" data-f="w"></div><div class="inp-g"><input type="number" inputmode="numeric" placeholder="${rPh}" value="${s.reps}" data-i="${i}" data-si="${si}" data-f="r"></div></div>`;
+        return`<div class="ex-set-row"><span class="set-num">S${si+1}</span><div class="inp-g"><input type="number" inputmode="decimal" placeholder="${wPh}" value="${s.weight}" data-i="${i}" data-si="${si}" data-f="w"></div><div class="inp-g"><input type="number" inputmode="numeric" placeholder="${rPh}" value="${s.reps}" data-i="${i}" data-si="${si}" data-f="r"></div></div>`;
       }).join('');
-      const lastHdr=has&&lastDate?`<span class="sets-last-date">Last: ${lastDate}</span>`:'';
-      setsHtml=`<div class="ex-sets"><div class="ex-sets-hdr"><span>${lastHdr}</span><span class="sets-lbl">Weight (${ex.unit==='BW'?'BW':ex.unit})</span><span class="sets-lbl">Reps</span></div>${setsHtml}</div>`;
+      setsHtml=`<div class="ex-sets"><div class="ex-sets-hdr"><span></span><span class="sets-lbl">Weight (${ex.unit==='BW'?'BW':ex.unit})</span><span class="sets-lbl">Reps</span></div>${setsHtml}</div>`;
     }
     return`<div class="exc ${ex.completed?'done':''}" data-i="${i}">
       <div class="ex-top"><button class="chk" data-i="${i}">${ex.completed?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>':''}</button><span class="ex-nm">${esc(ex.name)}</span></div>
