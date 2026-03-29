@@ -954,7 +954,21 @@ function renderWorkout(){
     </div>`;
   }).join('');
 
-  list.querySelectorAll('.chk').forEach(b=>{b.addEventListener('click',()=>{const i=parseInt(b.dataset.i);sess.exercises[i].completed=!sess.exercises[i].completed;saveState();renderWorkout()})});
+  list.querySelectorAll('.chk').forEach(b=>{b.addEventListener('click',()=>{
+    const i=parseInt(b.dataset.i),ex=sess.exercises[i],card=b.closest('.exc');
+    ex.completed=!ex.completed;
+    card.classList.toggle('done',ex.completed);
+    if(ex.completed){
+      const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+      svg.setAttribute('width','14');svg.setAttribute('height','14');svg.setAttribute('viewBox','0 0 24 24');
+      svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','3');
+      svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');
+      const pl=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+      pl.setAttribute('points','20 6 9 17 4 12');svg.appendChild(pl);
+      b.textContent='';b.appendChild(svg);
+    } else {b.textContent=''}
+    saveState();
+  })});
   let dt;list.querySelectorAll('.ex-sets input').forEach(inp=>{inp.addEventListener('input',()=>{
     const i=parseInt(inp.dataset.i),si=parseInt(inp.dataset.si),f=inp.dataset.f;
     if(f==='w')sess.exercises[i].sets[si].weight=inp.value;
