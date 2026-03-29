@@ -869,7 +869,7 @@ function initSession(){
         const sets=[];
         for(let si=0;si<numSets;si++){
           const lastSet=le&&le.sets&&le.sets[si]?le.sets[si]:null;
-          sets.push({weight:lastSet?lastSet.weight:'',reps:''});
+          sets.push({weight:'',reps:''});
         }
         const cw=le&&le.sets&&le.sets[0]&&le.sets[0].weight?parseFloat(le.sets[0].weight):ex.w;
         return{name:ex.n,targetSets:ex.s,targetReps:ex.r,rest:ex.rest,startWeight:cw,originalWeight:ex.w,unit:ex.u,progression:ex.p,sets:sets,completed:false};
