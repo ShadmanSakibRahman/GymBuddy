@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#000000">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>GymBuddy — Your Workout Companion</title>
@@ -549,6 +549,7 @@ body::after{
   .toast{transition:none}
 }
 
+*{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.1) transparent}
 ::-webkit-scrollbar{width:5px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
@@ -594,7 +595,7 @@ body::after{
       <h1>GymBuddy</h1>
     </div>
     <div class="hdr-right">
-      <span class="sync" id="syncDot" title="Synced"></span>
+      <span class="sync" id="syncDot" title="Synced" role="status" aria-label="Synced"></span>
       <button class="ibtn" id="resetBtn" title="Reset session" aria-label="Reset session"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></button>
       <div id="userAvatar" class="av-init" title="Account">?</div>
     </div>
@@ -614,9 +615,9 @@ body::after{
   <div class="hist" id="historyTab"></div>
   <div class="prog" id="progressTab"></div>
   <div class="rules" id="rulesTab"></div>
-  <div class="credit">Built by <a href="#">Md. Shadman Sakib Rahman</a> &mdash; GymBuddy &copy; 2026</div>
+  <div class="credit">Built by <a href="#">Md. Shadman Sakib Rahman</a> &mdash; GymBuddy &copy; <span id="copyYear"></span></div>
 </div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="alert" aria-live="polite"></div>
 
 <div class="edit-panel" id="editPanel">
   <div class="edit-hdr"><h2 id="editTitle">EDIT WORKOUT</h2><button class="edit-close" id="editClose" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
@@ -704,9 +705,14 @@ auth.onAuthStateChanged(user=>{
     document.getElementById('mainApp').classList.add('on');showLoginLoading(false);
     document.getElementById('syncDot').style.display='';
     const av=document.getElementById('userAvatar');
-    if(user.photoURL){av.outerHTML=`<img src="${user.photoURL}" class="avatar" id="userAvatar" title="${user.displayName||user.email}" referrerpolicy="no-referrer">`}
-    else{const i=(user.displayName||user.email||'?')[0].toUpperCase();av.textContent=i;av.title=user.displayName||user.email}
-    document.getElementById('userAvatar').addEventListener('click',()=>{showModal('Sign Out',`Signed in as ${user.displayName||user.email}. Sign out?`,()=>auth.signOut())});
+    const uName=user.displayName||user.email||'?';
+    if(user.photoURL){
+      const img=document.createElement('img');
+      img.src=user.photoURL;img.className='avatar';img.id='userAvatar';
+      img.title=uName;img.referrerPolicy='no-referrer';
+      av.replaceWith(img);
+    } else {av.textContent=uName[0].toUpperCase();av.title=uName}
+    document.getElementById('userAvatar').addEventListener('click',()=>{showModal('Sign Out','Signed in as '+esc(uName)+'. Sign out?',()=>auth.signOut())});
     loadFromFirebase();
   }else{currentUser=null;userRef=null;document.getElementById('loginScreen').classList.remove('out');document.getElementById('mainApp').classList.remove('on');document.getElementById('bottomBar').style.display='none'}
 });
@@ -724,16 +730,20 @@ function loadFromFirebase(){
     initSession();saveState();render();setSync('ok');
   }).catch(()=>{state=loadLocal();initSession();render();setSync('off')});
 }
+let _saveTimer=null;
 function saveState(){
   localStorage.setItem('gb_data',JSON.stringify(state));
   if(guestMode)return;
-  if(userRef){setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'))}
+  if(userRef){
+    clearTimeout(_saveTimer);
+    _saveTimer=setTimeout(()=>{setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'))},1000);
+  }
 }
 function loadLocal(){
   try{const r=localStorage.getItem('gb_data');if(r){const s=JSON.parse(r);if(!s.sessions)s.sessions={};if(!s.cycleCount)s.cycleCount=1;if(!s.customWorkouts)s.customWorkouts={};return s}}catch(e){}
   return defState();
 }
-function setSync(s){const d=document.getElementById('syncDot');d.className='sync'+(s==='s'?' s':s==='off'?' off':'');d.title=s==='ok'?'Synced':s==='s'?'Syncing...':'Offline'}
+function setSync(s){const d=document.getElementById('syncDot');d.className='sync'+(s==='s'?' s':s==='off'?' off':'');const t=s==='ok'?'Synced':s==='s'?'Syncing...':'Offline';d.title=t;d.setAttribute('aria-label',t)}
 
 // ═══════════════════════════════════════════════
 // DATA
@@ -907,7 +917,7 @@ function renderWorkout(){
       <div class="ex-top"><button class="chk" data-i="${i}">${ex.completed?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>':''}</button><span class="ex-nm">${esc(ex.name)}</span></div>
       <div class="ex-meta">${ex.targetSets?`<span><span class="v">${ex.targetSets}</span> sets</span>`:''}<span><span class="v">${ex.targetReps}</span> reps</span>${ex.rest!=='-'?`<span><span class="v">${ex.rest}</span> rest</span>`:''}</div>
       ${li}${setsHtml}
-      ${ex.progression?`<div class="ex-prog">${ex.progression}</div>`:''}
+      ${ex.progression?`<div class="ex-prog">${esc(ex.progression)}</div>`:''}
     </div>`;
   }).join('');
 
@@ -983,7 +993,7 @@ function renderHistory(){
 // ═══ PROGRESS ═══
 function renderProgress(){
   const p=document.getElementById('progressTab'),names=new Set();
-  for(let d=1;d<=8;d++){getWorkouts(d).forEach(e=>{if(e.w>0)names.add(e.n)})}
+  for(let d=1;d<=7;d++){getWorkouts(d).forEach(e=>{if(e.w>0)names.add(e.n)})}
   Object.values(state.sessions).forEach(s=>{if(!s.exercises)return;s.exercises.forEach(e=>{
     if(!e.completed)return;
     if(e.sets&&e.sets.some(s=>s.weight&&parseFloat(s.weight)>0))names.add(e.name);
@@ -994,7 +1004,7 @@ function renderProgress(){
     const logs=[];Object.keys(state.sessions).sort().forEach(k=>{const s=state.sessions[k];if(!s.exercises)return;const ex=s.exercises.find(e=>e.name===name&&e.completed);if(!ex)return;
       if(ex.sets&&ex.sets.length){const maxW=Math.max(...ex.sets.map(s=>parseFloat(s.weight)||0));if(maxW>0)logs.push({w:maxW,r:parseInt(ex.sets[0].reps)||0})}
       else if(ex.loggedWeight){logs.push({w:parseFloat(ex.loggedWeight),r:parseInt(ex.loggedReps)||0})}});
-    let sw=0,unit='kg';for(let d=1;d<=8;d++){const f=getWorkouts(d).find(e=>e.n===name);if(f){sw=f.w;unit=f.u||'kg';break}}
+    let sw=0,unit='kg';for(let d=1;d<=7;d++){const f=getWorkouts(d).find(e=>e.n===name);if(f){sw=f.w;unit=f.u||'kg';break}}
     if(logs.length>0){const lat=logs[logs.length-1];pd.push({name,sw,cw:lat.w,change:lat.w-sw,sess:logs.length,unit})}
   });
   if(!pd.length){p.innerHTML=`<div class="empty"><div class="ico"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><p>Log sessions to see progression.</p></div>`;return}
@@ -1120,6 +1130,11 @@ let modalCb=null;
 function showModal(title,text,cb){document.getElementById('modalTitle').textContent=title;document.getElementById('modalText').textContent=text;document.getElementById('modal').classList.add('show');modalCb=cb}
 document.getElementById('modalCancel').addEventListener('click',()=>{document.getElementById('modal').classList.remove('show');modalCb=null});
 document.getElementById('modalConfirm').addEventListener('click',()=>{document.getElementById('modal').classList.remove('show');if(modalCb)modalCb();modalCb=null});
+// Escape key closes modal and edit panel
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){
+  if(document.getElementById('modal').classList.contains('show')){document.getElementById('modal').classList.remove('show');modalCb=null}
+  else if(document.getElementById('editPanel').classList.contains('open')){closeEditPanel()}
+}});
 
 function validateSession(sess){
   const w=[];sess.exercises.forEach(ex=>{if(ex.completed){
@@ -1137,6 +1152,7 @@ function validateSession(sess){
 
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function render(){renderCycle();renderWorkout()}
+document.getElementById('copyYear').textContent=new Date().getFullYear();
 </script>
 </body>
 </html>
