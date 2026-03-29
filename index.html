@@ -740,16 +740,23 @@ auth.onAuthStateChanged(user=>{
 
 // ═══ SYNC ═══
 function loadFromFirebase(){
+  // Show local data INSTANTLY, then sync Firebase in background
+  state=loadLocal();
+  initSession();render();hideLoading();
+
+  // Now fetch Firebase data in background
   setSync('s');
-  const localData=loadLocal();
   userRef.once('value').then(snap=>{
     const d=snap.val();
-    if(d){state=d;if(!state.sessions)state.sessions={};if(!state.cycleCount)state.cycleCount=1;if(!state.customWorkouts)state.customWorkouts={};if(!state.currentCycleDay||state.currentCycleDay<1||state.currentCycleDay>7)state.currentCycleDay=1}
-    else state=defState();
-    // Merge any local guest sessions into Firebase data
-    if(localData&&localData.sessions){Object.keys(localData.sessions).forEach(k=>{if(!state.sessions[k])state.sessions[k]=localData.sessions[k]})}
-    initSession();saveState();render();setSync('ok');hideLoading();
-  }).catch(()=>{state=loadLocal();initSession();render();setSync('off');hideLoading()});
+    if(d){
+      const fb=d;if(!fb.sessions)fb.sessions={};if(!fb.cycleCount)fb.cycleCount=1;if(!fb.customWorkouts)fb.customWorkouts={};if(!fb.currentCycleDay||fb.currentCycleDay<1||fb.currentCycleDay>7)fb.currentCycleDay=1;
+      // Merge: Firebase wins for existing keys, local fills gaps
+      const local=loadLocal();
+      if(local&&local.sessions){Object.keys(local.sessions).forEach(k=>{if(!fb.sessions[k])fb.sessions[k]=local.sessions[k]})}
+      state=fb;
+    }
+    initSession();saveState();render();setSync('ok');
+  }).catch(()=>{setSync('off')});
 }
 function hideLoading(){
   const el=document.getElementById('appLoading');if(el)el.style.display='none';
