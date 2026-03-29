@@ -959,12 +959,21 @@ function renderWorkout(){
     const i=parseInt(inp.dataset.i),si=parseInt(inp.dataset.si),f=inp.dataset.f;
     if(f==='w')sess.exercises[i].sets[si].weight=inp.value;
     if(f==='r')sess.exercises[i].sets[si].reps=inp.value;
-    // Auto-tick when all reps fields are filled
-    const ex=sess.exercises[i];
+    // Auto-tick/untick without full re-render
+    const ex=sess.exercises[i],card=inp.closest('.exc'),chk=card.querySelector('.chk');
     const allRepsFilled=ex.sets.every(s=>s.reps&&s.reps.trim()!=='');
-    if(allRepsFilled&&!ex.completed){ex.completed=true;renderWorkout()}
-    // Auto-untick if all reps are cleared
-    if(ex.completed&&ex.sets.every(s=>!s.reps||s.reps.trim()==='')){ex.completed=false;renderWorkout()}
+    if(allRepsFilled&&!ex.completed){
+      ex.completed=true;card.classList.add('done');
+      const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+      svg.setAttribute('width','14');svg.setAttribute('height','14');svg.setAttribute('viewBox','0 0 24 24');
+      svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','3');
+      svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');
+      const pl=document.createElementNS('http://www.w3.org/2000/svg','polyline');
+      pl.setAttribute('points','20 6 9 17 4 12');svg.appendChild(pl);
+      chk.textContent='';chk.appendChild(svg);
+    } else if(ex.completed&&ex.sets.every(s=>!s.reps||s.reps.trim()==='')){
+      ex.completed=false;card.classList.remove('done');chk.textContent='';
+    }
     clearTimeout(dt);dt=setTimeout(()=>saveState(),800);
   })});
 }
