@@ -4,13 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#000000">
+<meta http-equiv="X-Frame-Options" content="DENY">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' https: data:; connect-src https://gymbuddy-9d596-default-rtdb.asia-southeast1.firebasedatabase.app https://www.googleapis.com https://securetoken.googleapis.com https://identitytoolkit.googleapis.com; frame-src https://gymbuddy-9d596.firebaseapp.com https://accounts.google.com;">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>GymBuddy — Your Workout Companion</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" crossorigin="anonymous"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js" crossorigin="anonymous"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -673,9 +675,10 @@ document.getElementById('emailLoginBtn').addEventListener('click',async()=>{
     if(isSignUp)await auth.createUserWithEmailAndPassword(email,pass);
     else await auth.signInWithEmailAndPassword(email,pass);
   }catch(e){
-    const m={'auth/user-not-found':'No account found. Try signing up.','auth/wrong-password':'Incorrect password.',
-      'auth/email-already-in-use':'Email already registered.','auth/invalid-email':'Invalid email.'};
-    showLoginError(m[e.code]||e.message);showLoginLoading(false);
+    const m={'auth/user-not-found':'Invalid email or password.','auth/wrong-password':'Invalid email or password.',
+      'auth/email-already-in-use':'Could not create account. Try signing in.','auth/invalid-email':'Invalid email address.',
+      'auth/too-many-requests':'Too many attempts. Try again later.'};
+    showLoginError(m[e.code]||'Something went wrong. Try again.');showLoginLoading(false);
   }
 });
 document.getElementById('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('emailLoginBtn').click()});
@@ -915,7 +918,7 @@ function renderWorkout(){
     }
     return`<div class="exc ${ex.completed?'done':''}" data-i="${i}">
       <div class="ex-top"><button class="chk" data-i="${i}">${ex.completed?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>':''}</button><span class="ex-nm">${esc(ex.name)}</span></div>
-      <div class="ex-meta">${ex.targetSets?`<span><span class="v">${ex.targetSets}</span> sets</span>`:''}<span><span class="v">${ex.targetReps}</span> reps</span>${ex.rest!=='-'?`<span><span class="v">${ex.rest}</span> rest</span>`:''}</div>
+      <div class="ex-meta">${ex.targetSets?`<span><span class="v">${esc(''+ex.targetSets)}</span> sets</span>`:''}<span><span class="v">${esc(ex.targetReps)}</span> reps</span>${ex.rest!=='-'?`<span><span class="v">${esc(ex.rest)}</span> rest</span>`:''}</div>
       ${li}${setsHtml}
       ${ex.progression?`<div class="ex-prog">${esc(ex.progression)}</div>`:''}
     </div>`;
@@ -1011,7 +1014,7 @@ function renderProgress(){
   const total=Object.keys(state.sessions).filter(k=>state.sessions[k].exercises&&state.sessions[k].exercises.some(e=>e.completed)).length,circ=2*Math.PI*22;
   p.innerHTML=`<div class="p-card"><h3>Overview</h3><div class="p-stats"><div class="p-stat"><div class="num" style="color:var(--accent)">${total}</div><div class="lbl">Sessions</div></div><div class="p-stat"><div class="num" style="color:var(--accent2)">${pd.length}</div><div class="lbl">Exercises</div></div></div></div>
     ${pd.map(x=>{const pct=x.sw>0?Math.min(100,Math.max(5,(x.cw/(x.sw*1.5))*100)):50;const off=circ-(circ*pct/100);const cs=x.change>=0?`+${x.change}`:`${x.change}`;const cc=x.change>=0?'var(--green)':'var(--red)';
-      return`<div class="p-card"><div class="ring-wrap"><svg class="ring-svg" viewBox="0 0 56 56"><circle class="ring-bg" cx="28" cy="28" r="22"/><circle class="ring-fg" cx="28" cy="28" r="22" stroke-dasharray="${circ}" stroke-dashoffset="${off}"/></svg><div class="ring-info"><div class="nm">${x.name}</div><div class="det">Start: ${x.sw} ${x.unit} &rarr; Now: <strong>${x.cw} ${x.unit}</strong> <span style="color:${cc}">(${cs})</span></div><div class="det">${x.sess} session${x.sess>1?'s':''}</div></div></div></div>`}).join('')}`;
+      return`<div class="p-card"><div class="ring-wrap"><svg class="ring-svg" viewBox="0 0 56 56"><circle class="ring-bg" cx="28" cy="28" r="22"/><circle class="ring-fg" cx="28" cy="28" r="22" stroke-dasharray="${circ}" stroke-dashoffset="${off}"/></svg><div class="ring-info"><div class="nm">${esc(x.name)}</div><div class="det">Start: ${x.sw} ${x.unit} &rarr; Now: <strong>${x.cw} ${x.unit}</strong> <span style="color:${cc}">(${cs})</span></div><div class="det">${x.sess} session${x.sess>1?'s':''}</div></div></div></div>`}).join('')}`;
 }
 
 // ═══ RULES ═══
@@ -1072,12 +1075,12 @@ function renderEditExercises(){
         <button class="edit-move-btn ${i===0?'dis':''}" data-i="${i}" data-dir="up" aria-label="Move up"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
         <button class="edit-move-btn ${i===len-1?'dis':''}" data-i="${i}" data-dir="down" aria-label="Move down"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
       </div>
-      <input type="text" value="${ex.n}" data-i="${i}" data-f="n" placeholder="Exercise name">
+      <input type="text" value="${ex.n}" data-i="${i}" data-f="n" placeholder="Exercise name" maxlength="80">
       <button class="edit-ex-del" data-i="${i}" aria-label="Delete exercise"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
     </div>
     <div class="edit-row"><div><label>Sets</label><input type="number" value="${ex.s}" data-i="${i}" data-f="s" min="0" max="20" placeholder="3"></div><div><label>Reps</label><input type="text" value="${ex.r}" data-i="${i}" data-f="r" placeholder="8-12"></div><div><label>Rest</label><input type="text" value="${ex.rest}" data-i="${i}" data-f="rest" placeholder="60s"></div></div>
     <div class="edit-row r2"><div><label>Weight</label><input type="number" value="${ex.w}" data-i="${i}" data-f="w" min="0" step="0.5"></div><div><label>Unit</label><select data-i="${i}" data-f="u"><option value="kg" ${ex.u==='kg'?'selected':''}>kg</option><option value="BW" ${ex.u==='BW'?'selected':''}>BW</option><option value="lbs" ${ex.u==='lbs'?'selected':''}>lbs</option><option value="" ${ex.u===''?'selected':''}>None</option></select></div></div>
-    <div class="edit-row"><div style="grid-column:1/-1"><label>Progression</label><input type="text" value="${ex.p}" data-i="${i}" data-f="p" placeholder="+5 kg when 12 reps"></div></div>
+    <div class="edit-row"><div style="grid-column:1/-1"><label>Progression</label><input type="text" value="${ex.p}" data-i="${i}" data-f="p" placeholder="+5 kg when 12 reps" maxlength="80"></div></div>
   </div>`).join('');
   // Move buttons
   c.querySelectorAll('.edit-move-btn:not(.dis)').forEach(b=>{b.addEventListener('click',()=>{
