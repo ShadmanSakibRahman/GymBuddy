@@ -978,7 +978,14 @@ function renderCycle(){
     const lbl=isRest?'REST':c.focus.split(' ')[0].slice(0,4).toUpperCase();
     return`<div class="cd ${isRest?'rest':''} ${on}" data-day="${c.day}"><span class="n">${c.day}</span><span class="l">${lbl}</span></div>`;
   }).join('');
-  bar.querySelectorAll('.cd').forEach(el=>{el.addEventListener('click',()=>{cleanGhostSession();state.currentCycleDay=parseInt(el.dataset.day);initSession();saveState(true);render()})});
+  bar.querySelectorAll('.cd').forEach(el=>{el.addEventListener('click',()=>{
+    const newDay=parseInt(el.dataset.day);if(newDay===state.currentCycleDay)return;
+    const key=state.todaySession,sess=key?state.sessions[key]:null;
+    const hasData=sess&&sess.exercises&&sess.exercises.some(e=>hasSetData(e));
+    function doSwitch(){cleanGhostSession();state.currentCycleDay=newDay;initSession();saveState(true);render()}
+    if(hasData&&!sess.exercises.some(e=>e.completed)){showModal('Switch Day','You have unsaved data. Switch day and discard it?',doSwitch)}
+    else doSwitch();
+  })});
 }
 
 // ═══ SESSION ═══
@@ -1099,10 +1106,13 @@ function renderWorkout(){
       const inputs=card.querySelectorAll('.ex-sets input');
       inputs.forEach(inp=>{
         if(!inp.value&&inp.placeholder&&inp.placeholder!==''){
+          // Don't auto-fill non-numeric placeholders like "AMRAP" or "15-20 min"
+          const ph=inp.placeholder;
+          if(isNaN(parseFloat(ph)))return;
           const si=parseInt(inp.dataset.si),f=inp.dataset.f;
-          inp.value=inp.placeholder;
-          if(f==='w')ex.sets[si].weight=inp.placeholder;
-          if(f==='r')ex.sets[si].reps=inp.placeholder;
+          inp.value=ph;
+          if(f==='w')ex.sets[si].weight=ph;
+          if(f==='r')ex.sets[si].reps=ph;
         }
       });
       const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
@@ -1330,19 +1340,23 @@ function switchTab(n){
 tabs.forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.tab)));
 
 // ═══ LOG SESSION ═══
+let _logLocked=false;
 document.getElementById('saveBtn').addEventListener('click',()=>{
+  if(_logLocked)return;
   const sess=state.sessions[state.todaySession];if(!sess)return;
   const cnt=sess.exercises.filter(e=>e.completed).length;
   if(!cnt){showToast('Check off at least one exercise!');return}
   const warns=validateSession(sess);if(warns.length){showToast(warns[0]);return}
-  // Wrap cycle: days 1-7 visible, day 8 hidden
-  const next=state.currentCycleDay>=7?1:state.currentCycleDay+1;
-  if(next===1)state.cycleCount=(state.cycleCount||1)+1;
-  state.currentCycleDay=next;
-  initSession();saveState(true);
-  const btn=document.getElementById('saveBtn');btn.textContent='SESSION LOGGED \u2713';btn.classList.add('saved');
-  showToast(`Logged! ${cnt}/${sess.exercises.length} exercises`);
-  setTimeout(()=>{btn.textContent='LOG SESSION';btn.classList.remove('saved');render()},2000);
+  showModal('Log Session',`Log ${cnt}/${sess.exercises.length} exercises and advance to next day?`,()=>{
+    _logLocked=true;
+    const next=state.currentCycleDay>=7?1:state.currentCycleDay+1;
+    if(next===1)state.cycleCount=(state.cycleCount||1)+1;
+    state.currentCycleDay=next;
+    initSession();saveState(true);
+    const btn=document.getElementById('saveBtn');btn.textContent='SESSION LOGGED \u2713';btn.classList.add('saved');
+    showToast(`Logged! ${cnt}/${sess.exercises.length} exercises`);
+    setTimeout(()=>{_logLocked=false;btn.textContent='LOG SESSION';btn.classList.remove('saved');render()},2000);
+  });
 });
 
 // ═══ RESET ═══
