@@ -764,32 +764,80 @@ auth.onAuthStateChanged(user=>{
     } else {av.textContent=uName[0].toUpperCase();av.title=uName}
     document.getElementById('userAvatar').addEventListener('click',()=>{showModal('Sign Out','Signed in as '+esc(uName)+'. Sign out?',()=>auth.signOut())});
     loadFromFirebase();
-  }else{currentUser=null;userRef=null;document.getElementById('loginScreen').classList.remove('out');document.getElementById('mainApp').classList.remove('on');document.getElementById('bottomBar').style.display='none'}
+  }else{
+    // Clean up real-time listener on sign out
+    if(userRef&&_fbListener){userRef.off('value',_fbListener);_fbListener=null}
+    fbReady=false;currentUser=null;userRef=null;
+    document.getElementById('loginScreen').classList.remove('out');document.getElementById('mainApp').classList.remove('on');document.getElementById('bottomBar').style.display='none';
+  }
 });
 
 // ═══ SYNC ═══
+let fbReady=false;      // blocks Firebase writes until initial load completes
+let _skipRemote=false;  // prevents echo when our own write triggers the listener
+let _fbListener=null;   // real-time listener handle
+
+function mergeSessions(local,remote){
+  // Union merge: keep ALL sessions from both sides
+  // For conflicts (same key), keep the version with more completed exercises (= more data logged)
+  const merged=Object.assign({},remote);
+  Object.keys(local).forEach(k=>{
+    if(!merged[k]){merged[k]=local[k];return}
+    // Both have this session — keep the one with more completed data
+    const lComp=local[k].exercises?local[k].exercises.filter(e=>e.completed).length:0;
+    const rComp=merged[k].exercises?merged[k].exercises.filter(e=>e.completed).length:0;
+    if(lComp>rComp)merged[k]=local[k];
+    else if(lComp===rComp){
+      // Same completed count — keep the one with more set data filled in
+      const lData=local[k].exercises?local[k].exercises.reduce((sum,e)=>sum+(e.sets?e.sets.filter(s=>s.weight||s.reps).length:0),0):0;
+      const rData=merged[k].exercises?merged[k].exercises.reduce((sum,e)=>sum+(e.sets?e.sets.filter(s=>s.weight||s.reps).length:0),0):0;
+      if(lData>rData)merged[k]=local[k];
+    }
+  });
+  return merged;
+}
+function mergeCustomWorkouts(local,remote){
+  // Union merge: keep all days from both, remote wins for conflicts
+  const merged=Object.assign({},local,remote);
+  return merged;
+}
 function loadFromFirebase(){
-  // Show local data INSTANTLY, then sync Firebase in background
+  fbReady=false;
+  // Show local data INSTANTLY while Firebase loads
   state=loadLocal();
   initSession();render();hideLoading();
 
-  // Now fetch Firebase data in background
+  // Set up real-time listener (replaces one-time fetch)
   setSync('s');
-  userRef.once('value').then(snap=>{
+  if(_fbListener)userRef.off('value',_fbListener);
+  _fbListener=userRef.on('value',snap=>{
+    // Skip if this is an echo from our own write
+    if(_skipRemote){_skipRemote=false;setSync('ok');return}
     const d=snap.val();
     if(d){
       const fb=d;if(!fb.sessions)fb.sessions={};if(!fb.cycleCount)fb.cycleCount=1;if(!fb.customWorkouts)fb.customWorkouts={};if(!fb.currentCycleDay||fb.currentCycleDay<1||fb.currentCycleDay>7)fb.currentCycleDay=1;
-      // Merge: Firebase wins for existing keys, local fills gaps
+      // Smart merge: union of sessions from local + Firebase, no data lost
       const local=loadLocal();
-      if(local&&local.sessions){Object.keys(local.sessions).forEach(k=>{if(!fb.sessions[k])fb.sessions[k]=local.sessions[k]})}
+      fb.sessions=mergeSessions(local.sessions||{},fb.sessions);
+      fb.customWorkouts=mergeCustomWorkouts(local.customWorkouts||{},fb.customWorkouts);
       state=fb;
     }
     initSession();
-    // Re-merge today's session with custom workouts from Firebase
-    // (session may have been created in Phase 1 with defaults before Firebase data arrived)
     mergeSessionWithPlan(state.currentCycleDay);
-    saveState();render();setSync('ok');
-  }).catch(()=>{setSync('off')});
+    // Save merged result locally (and to Firebase only after first load)
+    localStorage.setItem('gb_data',JSON.stringify(state));
+    if(fbReady){
+      // Subsequent remote updates — save merged state back
+      _skipRemote=true;
+      userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'));
+    }
+    fbReady=true;
+    render();setSync('ok');
+  },()=>{
+    // Listener error / offline — keep local data, don't overwrite anything
+    fbReady=true;
+    setSync('off');
+  });
 }
 function hideLoading(){
   const el=document.getElementById('appLoading');if(el)el.style.display='none';
@@ -800,17 +848,18 @@ let _saveTimer=null;
 function saveState(immediate){
   localStorage.setItem('gb_data',JSON.stringify(state));
   if(guestMode)return;
-  if(userRef){
-    clearTimeout(_saveTimer);
-    if(immediate){
-      setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'));
-    } else {
-      _saveTimer=setTimeout(()=>{setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'))},1000);
-    }
+  // Block Firebase writes until initial load completes — prevents empty state overwriting real data
+  if(!fbReady||!userRef)return;
+  clearTimeout(_saveTimer);
+  if(immediate){
+    _skipRemote=true;
+    setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'));
+  } else {
+    _saveTimer=setTimeout(()=>{_skipRemote=true;setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'))},1000);
   }
 }
 // Flush pending saves when user leaves page
-window.addEventListener('beforeunload',()=>{if(_saveTimer){clearTimeout(_saveTimer);if(userRef&&!guestMode){userRef.set(state)}}})
+window.addEventListener('beforeunload',()=>{if(_saveTimer){clearTimeout(_saveTimer);if(userRef&&!guestMode&&fbReady){userRef.set(state)}}})
 function loadLocal(){
   try{const r=localStorage.getItem('gb_data');if(r){const s=JSON.parse(r);if(!s.sessions)s.sessions={};if(!s.cycleCount)s.cycleCount=1;if(!s.customWorkouts)s.customWorkouts={};return s}}catch(e){}
   return defState();
