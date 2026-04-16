@@ -741,7 +741,7 @@ document.getElementById('guestBtn').addEventListener('click',()=>{
     guestMode=false;document.getElementById('loginScreen').classList.remove('out');document.getElementById('mainApp').classList.remove('on');
   })});
   document.getElementById('syncDot').style.display='none';
-  state=loadLocal();initSession();saveState();render();hideLoading();
+  state=loadLocal();runPplMigration(state);initSession();saveState();render();hideLoading();
 });
 
 function showLoginError(m){document.getElementById('loginError').textContent=m}
@@ -801,10 +801,24 @@ function mergeCustomWorkouts(local,remote){
   const merged=Object.assign({},local,remote);
   return merged;
 }
+function runPplMigration(obj){
+  // One-time migration: clear stale customWorkouts from old plan so new PPL defaults load
+  if(obj._pplMigrated)return;
+  obj.customWorkouts={};
+  // Remove today's ghost session so it gets recreated with new defaults
+  const tk=todayKey();
+  if(obj.sessions&&obj.sessions[tk]){
+    const s=obj.sessions[tk];
+    if(!s.exercises||!s.exercises.some(e=>e.completed||hasSetData(e)))delete obj.sessions[tk];
+  }
+  obj._pplMigrated=true;
+}
 function loadFromFirebase(){
   fbReady=false;
-  // Show local data INSTANTLY while Firebase loads
+  // Migrate localStorage BEFORE first render so Phase 1 shows correct exercises
   state=loadLocal();
+  runPplMigration(state);
+  localStorage.setItem('gb_data',JSON.stringify(state));
   initSession();render();hideLoading();
 
   // Set up real-time listener (replaces one-time fetch)
@@ -817,8 +831,11 @@ function loadFromFirebase(){
     const isInitial=!fbReady;
     if(d){
       const fb=d;if(!fb.sessions)fb.sessions={};if(!fb.cycleCount)fb.cycleCount=1;if(!fb.customWorkouts)fb.customWorkouts={};if(!fb.currentCycleDay||fb.currentCycleDay<1||fb.currentCycleDay>7)fb.currentCycleDay=1;
+      // Run migration on Firebase data BEFORE any merging
+      runPplMigration(fb);
       if(isInitial){
         // INITIAL LOAD: merge local + Firebase to preserve any offline work
+        // (local is already migrated above, so no stale customWorkouts leak in)
         const local=loadLocal();
         fb.sessions=mergeSessions(local.sessions||{},fb.sessions);
         fb.customWorkouts=mergeCustomWorkouts(local.customWorkouts||{},fb.customWorkouts);
@@ -838,17 +855,6 @@ function loadFromFirebase(){
         }
       }
       state=fb;
-    }
-    // One-time migration: clear stale customWorkouts from old plan so new defaults load
-    if(!state._pplMigrated){
-      state.customWorkouts={};
-      // Remove today's ghost session so it gets recreated with new defaults
-      const tk=todayKey();
-      if(state.sessions&&state.sessions[tk]){
-        const s=state.sessions[tk];
-        if(!s.exercises||!s.exercises.some(e=>e.completed||hasSetData(e)))delete state.sessions[tk];
-      }
-      state._pplMigrated=true;
     }
     initSession();
     mergeSessionWithPlan(state.currentCycleDay);
