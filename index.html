@@ -440,7 +440,9 @@ body::after{
 /* ═══ BOTTOM BAR ═══ */
 .bbar{
   display:none;
-  padding:20px 0 0;
+  position:sticky;bottom:0;z-index:50;
+  padding:12px 0;
+  background:linear-gradient(to top,rgba(0,0,0,0.95) 60%,transparent);
 }
 .log-btn{
   width:100%;max-width:100%;margin:0 auto;display:block;
@@ -571,6 +573,8 @@ body::after{
 .m-cancel:hover{background:rgba(255,255,255,.08)}
 .m-danger{background:var(--red-dim);color:var(--red)}
 .m-danger:hover{background:rgba(239,68,68,.15)}
+.m-confirm-pos{background:var(--green-dim);color:var(--green)}
+.m-confirm-pos:hover{background:rgba(48,209,88,.2)}
 
 /* ═══ VALIDATION ═══ */
 .inp-err{border-color:var(--red) !important;box-shadow:0 0 0 4px var(--red-dim) !important}
@@ -1080,7 +1084,11 @@ function renderWorkout(){
     if(!ex.sets){const ns=ex.targetSets||1;ex.sets=[];for(let si=0;si<ns;si++)ex.sets.push({weight:ex.loggedWeight||'',reps:ex.loggedReps||''})}
     // Last session reference
     let li='';
-    if(has){li=`<div class="ex-last">Last session: ${lastDate}</div>`}
+    if(has){
+      let lastInfo=lastDate;
+      if(le.sets&&le.sets.length){lastInfo+=': '+le.sets.map((s,si)=>`${s.weight||'-'}x${s.reps||'-'}`).join(', ')}
+      li=`<div class="ex-last">${esc(lastInfo)}</div>`;
+    }
     // Per-set inputs
     const numSets=ex.sets.length;
     let setsHtml='';
@@ -1095,7 +1103,7 @@ function renderWorkout(){
     }
     return`<div class="exc ${ex.completed?'done':''}" data-i="${i}">
       <div class="ex-top"><button class="chk" data-i="${i}">${ex.completed?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>':''}</button><span class="ex-nm">${esc(ex.name)}</span></div>
-      <div class="ex-meta">${ex.targetSets?`<span><span class="v">${esc(''+ex.targetSets)}</span> sets</span>`:''}<span><span class="v">${esc(ex.targetReps)}</span> reps</span>${ex.rest!=='-'?`<span><span class="v">${esc(ex.rest)}</span> rest</span>`:''}</div>
+      <div class="ex-meta">${ex.targetSets?`<span><span class="v">${esc(''+ex.targetSets)}</span> sets</span>`:''}<span><span class="v">${esc(ex.targetReps)}</span> reps</span>${ex.rest!=='-'?`<span><span class="v">${esc(fmtRest(ex.rest))}</span> rest</span>`:''}</div>
       ${li}${setsHtml}
       ${ex.progression?`<div class="ex-prog">${esc(ex.progression)}</div>`:''}
     </div>`;
@@ -1360,7 +1368,7 @@ document.getElementById('saveBtn').addEventListener('click',()=>{
     const btn=document.getElementById('saveBtn');btn.textContent='SESSION LOGGED \u2713';btn.classList.add('saved');
     showToast(`Logged! ${cnt}/${sess.exercises.length} exercises`);
     setTimeout(()=>{_logLocked=false;btn.textContent='LOG SESSION';btn.classList.remove('saved');render()},2000);
-  });
+  },{confirmText:'Log it',positive:true});
 });
 
 // ═══ RESET ═══
@@ -1438,7 +1446,13 @@ function addErrMsg(inp,msg){const el=document.createElement('div');el.className=
 // ═══ UTILS ═══
 function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800)}
 let modalCb=null;
-function showModal(title,text,cb){document.getElementById('modalTitle').textContent=title;document.getElementById('modalText').textContent=text;document.getElementById('modal').classList.add('show');modalCb=cb}
+function showModal(title,text,cb,opts){
+  document.getElementById('modalTitle').textContent=title;document.getElementById('modalText').textContent=text;
+  const btn=document.getElementById('modalConfirm');
+  btn.textContent=(opts&&opts.confirmText)||'Confirm';
+  btn.className=(opts&&opts.positive)?'m-confirm-pos':'m-danger';
+  document.getElementById('modal').classList.add('show');modalCb=cb;
+}
 document.getElementById('modalCancel').addEventListener('click',()=>{document.getElementById('modal').classList.remove('show');modalCb=null});
 document.getElementById('modalConfirm').addEventListener('click',()=>{document.getElementById('modal').classList.remove('show');if(modalCb)modalCb();modalCb=null});
 // Escape key closes modal and edit panel
@@ -1461,6 +1475,7 @@ function validateSession(sess){
   }});return w;
 }
 
+function fmtRest(r){if(!r||r==='-')return r;const n=parseInt(r);if(isNaN(n))return r;if(n>=120)return(n/60)+'min';if(n>=60)return Math.floor(n/60)+':'+(''+(n%60)).padStart(2,'0');return r}
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function render(){renderCycle();renderWorkout()}
 document.getElementById('copyYear').textContent=new Date().getFullYear();
