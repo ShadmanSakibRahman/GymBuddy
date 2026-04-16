@@ -1355,6 +1355,13 @@ document.getElementById('saveBtn').addEventListener('click',()=>{
   const warns=validateSession(sess);if(warns.length){showToast(warns[0]);return}
   showModal('Log Session',`Log ${cnt}/${sess.exercises.length} exercises and advance to next day?`,()=>{
     _logLocked=true;
+    // Move logged session to a timestamped key so clicking back gives a fresh session
+    const loggedKey=state.todaySession;
+    if(loggedKey&&state.sessions[loggedKey]){
+      const newKey=loggedKey+'_'+Date.now();
+      state.sessions[newKey]=state.sessions[loggedKey];
+      delete state.sessions[loggedKey];
+    }
     const next=state.currentCycleDay>=7?1:state.currentCycleDay+1;
     if(next===1)state.cycleCount=(state.cycleCount||1)+1;
     state.currentCycleDay=next;
