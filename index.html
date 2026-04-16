@@ -969,7 +969,8 @@ function renderCycle(){
   bar.innerHTML=CYCLE.map(c=>{
     const on=c.day===state.currentCycleDay?'on':'';
     const isRest=c.type==='rest';
-    return`<div class="cd ${isRest?'rest':''} ${on}" data-day="${c.day}"><span class="n">${c.day}</span><span class="l">${isRest?'REST':c.type.slice(0,3).toUpperCase()}</span></div>`;
+    const lbl=isRest?'REST':c.focus.split(' ')[0].slice(0,4).toUpperCase();
+    return`<div class="cd ${isRest?'rest':''} ${on}" data-day="${c.day}"><span class="n">${c.day}</span><span class="l">${lbl}</span></div>`;
   }).join('');
   bar.querySelectorAll('.cd').forEach(el=>{el.addEventListener('click',()=>{cleanGhostSession();state.currentCycleDay=parseInt(el.dataset.day);initSession();saveState(true);render()})});
 }
@@ -1139,6 +1140,7 @@ function renderHistory(){
   if(!logged.length){
     // Note: ioBar contains only static SVG/HTML with no user data — safe to use with innerHTML
     p.innerHTML=ioBar+`<div class="empty"><div class="ico"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div><p>No logged sessions yet.<br>Complete a workout and hit LOG SESSION!</p></div>`;
+    p.querySelector('.exp-btn').addEventListener('click',exportHistory);
     p.querySelector('.imp-btn').addEventListener('click',()=>document.getElementById('xlsxImport').click());
     document.getElementById('xlsxImport').addEventListener('change',importHistory);
     return;
@@ -1147,7 +1149,7 @@ function renderHistory(){
   // Note: ioBar is static HTML, session data is escaped via esc() — safe innerHTML usage
   p.innerHTML=ioBar+logged.map(key=>{
     const s=state.sessions[key],ds=key.split('_')[0],d=new Date(ds+'T00:00:00');
-    const fmt=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}),ci=CYCLE[s.cycleDay-1];
+    const fmt=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}),ci=CYCLE[(s.cycleDay||1)-1]||CYCLE[0];
     return`<div class="h-entry" data-k="${key}"><div class="h-date"><span>${fmt} &mdash; Day ${s.cycleDay}</span><div class="h-actions"><span class="h-tag" style="background:${bg[ci.type]};color:${tc[ci.type]}">${s.dayName}</span><button class="h-edit-btn" data-k="${key}">Edit</button><button class="del-btn" data-k="${key}" aria-label="Delete"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>
       <div class="h-exs" id="hexs-${key.replace(/[^a-zA-Z0-9]/g,'_')}">${s.exercises.filter(e=>e.completed).map(e=>{
         if(e.sets&&e.sets.length){
@@ -1203,7 +1205,9 @@ function renderHistory(){
 }
 
 // ═══ HISTORY EXPORT/IMPORT ═══
+function checkXLSX(){if(typeof XLSX==='undefined'){showToast('XLSX library not loaded — check your connection');return false}return true}
 function exportHistory(){
+  if(!checkXLSX())return;
   const keys=Object.keys(state.sessions).sort();
   const rows=[];
   keys.forEach(key=>{
@@ -1228,6 +1232,7 @@ function exportHistory(){
   showToast('Exported '+rows.length+' rows');
 }
 function importHistory(ev){
+  if(!checkXLSX())return;
   const file=ev.target.files[0];if(!file)return;ev.target.value='';
   const reader=new FileReader();
   reader.onload=function(e){
@@ -1247,7 +1252,7 @@ function importHistory(ev){
         const dp=new Date(r.Date);if(isNaN(dp))return;
         const ds=dp.toISOString().slice(0,10);
         const day=parseInt(r.Day)||1,cycle=parseInt(r.Cycle)||1;
-        const skey=ds+'_D'+day;
+        const skey=ds+'_C'+cycle+'_D'+day;
         if(!grouped[skey])grouped[skey]={date:dp.toISOString(),cycleDay:day,cycleCount:cycle,dayName:String(r.DayName||CYCLE[day-1].name),exercises:{}};
         const exName=String(r.Exercise);
         if(!grouped[skey].exercises[exName])grouped[skey].exercises[exName]={name:exName,unit:String(r.Unit||'kg'),sets:[]};
