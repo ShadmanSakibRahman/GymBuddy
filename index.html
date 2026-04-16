@@ -814,27 +814,43 @@ function loadFromFirebase(){
     // Skip if this is an echo from our own write
     if(_skipRemote){_skipRemote=false;setSync('ok');return}
     const d=snap.val();
+    const isInitial=!fbReady;
     if(d){
       const fb=d;if(!fb.sessions)fb.sessions={};if(!fb.cycleCount)fb.cycleCount=1;if(!fb.customWorkouts)fb.customWorkouts={};if(!fb.currentCycleDay||fb.currentCycleDay<1||fb.currentCycleDay>7)fb.currentCycleDay=1;
-      // Smart merge: union of sessions from local + Firebase, no data lost
-      const local=loadLocal();
-      fb.sessions=mergeSessions(local.sessions||{},fb.sessions);
-      fb.customWorkouts=mergeCustomWorkouts(local.customWorkouts||{},fb.customWorkouts);
+      if(isInitial){
+        // INITIAL LOAD: merge local + Firebase to preserve any offline work
+        const local=loadLocal();
+        fb.sessions=mergeSessions(local.sessions||{},fb.sessions);
+        fb.customWorkouts=mergeCustomWorkouts(local.customWorkouts||{},fb.customWorkouts);
+      }
+      if(!isInitial){
+        // Subsequent remote update (other device wrote, or reconnect after offline)
+        // Preserve ONLY today's in-progress session from local state
+        // (handles offline edits without resurrecting deleted sessions)
+        const tk=todayKey();
+        if(state.sessions&&state.sessions[tk]&&!fb.sessions[tk]){
+          fb.sessions[tk]=state.sessions[tk];
+        } else if(state.sessions&&state.sessions[tk]&&fb.sessions[tk]){
+          // Both have today's session — keep the one with more data
+          const lComp=state.sessions[tk].exercises?state.sessions[tk].exercises.filter(e=>e.completed).length:0;
+          const rComp=fb.sessions[tk].exercises?fb.sessions[tk].exercises.filter(e=>e.completed).length:0;
+          if(lComp>rComp)fb.sessions[tk]=state.sessions[tk];
+        }
+      }
       state=fb;
     }
     initSession();
     mergeSessionWithPlan(state.currentCycleDay);
-    // Save merged result locally (and to Firebase only after first load)
     localStorage.setItem('gb_data',JSON.stringify(state));
-    if(fbReady){
-      // Subsequent remote updates — save merged state back
+    if(isInitial){
+      // Push merged result back to Firebase once (in case local had offline sessions)
+      fbReady=true;
       _skipRemote=true;
       userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'));
     }
-    fbReady=true;
     render();setSync('ok');
   },()=>{
-    // Listener error / offline — keep local data, don't overwrite anything
+    // Listener error / offline — allow local use, don't overwrite anything
     fbReady=true;
     setSync('off');
   });
