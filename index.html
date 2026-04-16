@@ -13,6 +13,7 @@
 <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="dns-prefetch" href="https://apis.google.com">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
 <link rel="preload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" as="script" crossorigin="anonymous">
 <link rel="preload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" as="script" crossorigin="anonymous">
@@ -378,6 +379,20 @@ body::after{
   background:rgba(255,255,255,0.05);color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;text-align:center;font-weight:600;
 }
 .h-edit-row input:focus{outline:none;border-color:var(--accent)}
+.hist-io{display:flex;gap:8px;margin-bottom:12px}
+.hist-io button{
+  flex:1;padding:10px;border-radius:10px;font-family:'DM Sans',sans-serif;
+  font-size:12px;font-weight:700;cursor:pointer;transition:all .2s;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.hist-io .exp-btn{
+  background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,.2);color:var(--blue);
+}
+.hist-io .exp-btn:hover{background:var(--blue-dim)}
+.hist-io .imp-btn{
+  background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,.2);color:var(--green);
+}
+.hist-io .imp-btn:hover{background:rgba(52,211,153,0.15)}
 .h-save-btn{
   margin-top:10px;width:100%;padding:10px;border:none;border-radius:var(--rxs);
   background:var(--accent);color:#fff;font-family:'DM Sans',sans-serif;
@@ -815,49 +830,49 @@ const CYCLE=[
   {day:7,name:"Legs B",type:"lower",focus:"Legs"},
 ];
 const DEFAULT_WK={
-  1:[{n:"Bench Press",s:4,r:"6-8",rest:"120s",w:40,u:"kg",p:"+2.5 kg when 8 reps hit"},
-     {n:"Incline Dumbbell Press",s:3,r:"8-10",rest:"90s",w:16,u:"kg",p:"+2 kg when 10 reps"},
-     {n:"Cable Fly",s:2,r:"12-15",rest:"60s",w:10,u:"kg",p:"+2.5 kg when 15 reps"},
-     {n:"Overhead Press",s:3,r:"6-8",rest:"90s",w:20,u:"kg",p:"+2.5 kg when 8 reps"},
-     {n:"Lateral Raise",s:4,r:"12-15",rest:"45s",w:10,u:"kg",p:"+2 kg when 15 reps"},
-     {n:"Rear Delt Fly",s:2,r:"12-15",rest:"60s",w:8,u:"kg",p:"+2 kg when 15 reps"},
-     {n:"Tricep Pushdown",s:3,r:"10-12",rest:"60s",w:25,u:"kg",p:"+2.5 kg when 12 reps"}],
-  2:[{n:"Pull-ups",s:3,r:"AMRAP",rest:"90s",w:0,u:"BW",p:"Add reps"},
-     {n:"Lat Pulldown",s:3,r:"8-10",rest:"90s",w:50,u:"kg",p:"+5 kg when 10 reps"},
-     {n:"Row",s:3,r:"6-8",rest:"90s",w:40,u:"kg",p:"+5 kg when 8 reps"},
-     {n:"Seated Row",s:2,r:"10-12",rest:"90s",w:45,u:"kg",p:"+5 kg when 12 reps"},
-     {n:"Face Pull",s:2,r:"12-15",rest:"60s",w:15,u:"kg",p:"+2.5 kg when 15 reps"},
-     {n:"Barbell Curl",s:3,r:"8-10",rest:"60s",w:20,u:"kg",p:"+2.5 kg when 10 reps"},
-     {n:"Hammer Curl",s:2,r:"10-12",rest:"60s",w:12,u:"kg",p:"+2 kg when 12 reps"}],
-  3:[{n:"Squat",s:4,r:"6-8",rest:"120s",w:40,u:"kg",p:"+5 kg when 8 reps"},
-     {n:"Leg Press",s:2,r:"10-12",rest:"90s",w:65,u:"kg",p:"+10 kg when 12 reps"},
-     {n:"Romanian Deadlift",s:3,r:"8-10",rest:"90s",w:40,u:"kg",p:"+5 kg when 10 reps"},
-     {n:"Leg Curl",s:2,r:"10-12",rest:"60s",w:35,u:"kg",p:"+5 kg when 12 reps"},
-     {n:"Calf Raise",s:3,r:"12-15",rest:"60s",w:0,u:"BW",p:"Add weight when 15 reps"}],
+  1:[{n:"Bench Press",s:4,r:"6-8",rest:"150s",w:57,u:"kg",p:"+2.5 kg when 8 reps all sets"},
+     {n:"Incline Dumbbell Press",s:3,r:"8-10",rest:"100s",w:17,u:"kg",p:"+2 kg when 10 reps"},
+     {n:"Cable Fly",s:2,r:"12-15",rest:"75s",w:10,u:"kg",p:"+weight when 15 reps"},
+     {n:"Overhead Press",s:3,r:"6-8",rest:"120s",w:32,u:"kg",p:"+2.5 kg when 8 reps"},
+     {n:"Lateral Raise",s:4,r:"12-15",rest:"60s",w:7,u:"kg",p:"+weight when 15 reps"},
+     {n:"Rear Delt Fly",s:2,r:"12-15",rest:"60s",w:5,u:"kg",p:"strict form, increase slowly"},
+     {n:"Tricep Pushdown",s:3,r:"10-12",rest:"75s",w:20,u:"kg",p:"+weight when 12 reps"}],
+  2:[{n:"Pull-ups",s:3,r:"AMRAP",rest:"150s",w:0,u:"BW",p:"total ≥18 reps → +2.5-5 kg"},
+     {n:"Lat Pulldown",s:3,r:"8-10",rest:"90s",w:45,u:"kg",p:"+weight when 10 reps"},
+     {n:"Row",s:3,r:"6-8",rest:"120s",w:45,u:"kg",p:"+2.5-5 kg when 8 reps"},
+     {n:"Seated Row",s:2,r:"10-12",rest:"90s",w:30,u:"kg",p:"+weight when 12 reps"},
+     {n:"Face Pull",s:2,r:"12-15",rest:"60s",w:10,u:"kg",p:"controlled reps, increase slowly"},
+     {n:"Barbell Curl",s:3,r:"8-10",rest:"90s",w:22,u:"kg",p:"+2.5 kg when 10 reps"},
+     {n:"Hammer Curl",s:2,r:"10-12",rest:"75s",w:9,u:"kg",p:"+weight when 12 reps"}],
+  3:[{n:"Squat",s:4,r:"6-8",rest:"150s",w:55,u:"kg",p:"+2.5-5 kg when 8 reps"},
+     {n:"Leg Press",s:2,r:"10-12",rest:"90s",w:60,u:"kg",p:"+weight when 12 reps"},
+     {n:"Romanian Deadlift",s:3,r:"8-10",rest:"120s",w:45,u:"kg",p:"+2.5-5 kg when 10 reps"},
+     {n:"Leg Curl",s:2,r:"10-12",rest:"75s",w:30,u:"kg",p:"+weight when 12 reps"},
+     {n:"Calf Raise",s:3,r:"12-15",rest:"60s",w:20,u:"kg",p:"increase slowly"}],
   4:[{n:"Cardio",s:0,r:"15-20 min",rest:"-",w:0,u:"",p:""},
-     {n:"Cable Crunch",s:3,r:"12-15",rest:"60s",w:20,u:"kg",p:"+2.5 kg when 15 reps"},
-     {n:"Band Pull-Aparts",s:2,r:"15-20",rest:"45s",w:0,u:"BW",p:"Add reps"},
-     {n:"Overhead Tricep Extension",s:2,r:"12-15",rest:"60s",w:15,u:"kg",p:"+2.5 kg when 15 reps"}],
-  5:[{n:"Bench Press",s:3,r:"6-8",rest:"120s",w:40,u:"kg",p:"+2.5 kg when 8 reps"},
-     {n:"Incline Dumbbell Press",s:3,r:"8-10",rest:"90s",w:16,u:"kg",p:"+2 kg when 10 reps"},
-     {n:"Cable Fly",s:2,r:"12-15",rest:"60s",w:10,u:"kg",p:"+2.5 kg when 15 reps"},
-     {n:"Overhead Press",s:3,r:"6-8",rest:"90s",w:20,u:"kg",p:"+2.5 kg when 8 reps"},
-     {n:"Lateral Raise",s:3,r:"12-15",rest:"45s",w:10,u:"kg",p:"+2 kg when 15 reps"},
-     {n:"Rear Delt Fly",s:2,r:"12-15",rest:"60s",w:8,u:"kg",p:"+2 kg when 15 reps"},
-     {n:"Tricep Pushdown",s:3,r:"10-12",rest:"60s",w:25,u:"kg",p:"+2.5 kg when 12 reps"}],
-  6:[{n:"Pull-ups",s:3,r:"AMRAP",rest:"90s",w:0,u:"BW",p:"Add reps"},
-     {n:"Lat Pulldown",s:3,r:"8-10",rest:"90s",w:50,u:"kg",p:"+5 kg when 10 reps"},
-     {n:"Row",s:3,r:"6-8",rest:"90s",w:40,u:"kg",p:"+5 kg when 8 reps"},
-     {n:"Seated Row",s:2,r:"10-12",rest:"90s",w:45,u:"kg",p:"+5 kg when 12 reps"},
-     {n:"Face Pull",s:2,r:"12-15",rest:"60s",w:15,u:"kg",p:"+2.5 kg when 15 reps"},
-     {n:"Barbell Curl",s:3,r:"8-10",rest:"60s",w:20,u:"kg",p:"+2.5 kg when 10 reps"},
-     {n:"Hammer Curl",s:2,r:"10-12",rest:"60s",w:12,u:"kg",p:"+2 kg when 12 reps"},
+     {n:"Cable Crunch",s:3,r:"12-15",rest:"60s",w:15,u:"kg",p:"+weight when easy"},
+     {n:"Band Pull-Aparts",s:2,r:"15-20",rest:"50s",w:0,u:"BW",p:"increase band resistance"},
+     {n:"Overhead Tricep Extension",s:2,r:"12-15",rest:"60s",w:10,u:"kg",p:"+weight when 15 reps"}],
+  5:[{n:"Bench Press",s:3,r:"6-8",rest:"150s",w:57,u:"kg",p:"+2.5 kg when 8 reps all sets"},
+     {n:"Incline Dumbbell Press",s:3,r:"8-10",rest:"100s",w:17,u:"kg",p:"+2 kg when 10 reps"},
+     {n:"Cable Fly",s:2,r:"12-15",rest:"75s",w:10,u:"kg",p:"+weight when 15 reps"},
+     {n:"Overhead Press",s:3,r:"6-8",rest:"120s",w:32,u:"kg",p:"+2.5 kg when 8 reps"},
+     {n:"Lateral Raise",s:3,r:"12-15",rest:"60s",w:7,u:"kg",p:"+weight when 15 reps"},
+     {n:"Rear Delt Fly",s:2,r:"12-15",rest:"60s",w:5,u:"kg",p:"strict form, increase slowly"},
+     {n:"Tricep Pushdown",s:3,r:"10-12",rest:"75s",w:20,u:"kg",p:"+weight when 12 reps"}],
+  6:[{n:"Pull-ups",s:3,r:"AMRAP",rest:"150s",w:0,u:"BW",p:"total ≥18 reps → +2.5-5 kg"},
+     {n:"Lat Pulldown",s:3,r:"8-10",rest:"90s",w:45,u:"kg",p:"+weight when 10 reps"},
+     {n:"Row",s:3,r:"6-8",rest:"120s",w:45,u:"kg",p:"+2.5-5 kg when 8 reps"},
+     {n:"Seated Row",s:2,r:"10-12",rest:"90s",w:30,u:"kg",p:"+weight when 12 reps"},
+     {n:"Face Pull",s:2,r:"12-15",rest:"60s",w:10,u:"kg",p:"controlled reps, increase slowly"},
+     {n:"Barbell Curl",s:3,r:"8-10",rest:"90s",w:22,u:"kg",p:"+2.5 kg when 10 reps"},
+     {n:"Hammer Curl",s:2,r:"10-12",rest:"75s",w:9,u:"kg",p:"+weight when 12 reps"},
      {n:"Cardio",s:0,r:"15-20 min",rest:"-",w:0,u:"",p:""}],
-  7:[{n:"Squat",s:3,r:"6-8",rest:"120s",w:40,u:"kg",p:"+5 kg when 8 reps"},
-     {n:"Leg Press",s:2,r:"10-12",rest:"90s",w:65,u:"kg",p:"+10 kg when 12 reps"},
-     {n:"Romanian Deadlift",s:3,r:"8-10",rest:"90s",w:40,u:"kg",p:"+5 kg when 10 reps"},
-     {n:"Leg Curl",s:2,r:"10-12",rest:"60s",w:35,u:"kg",p:"+5 kg when 12 reps"},
-     {n:"Calf Raise",s:3,r:"12-15",rest:"60s",w:0,u:"BW",p:"Add weight when 15 reps"}]
+  7:[{n:"Squat",s:3,r:"6-8",rest:"150s",w:55,u:"kg",p:"+2.5-5 kg when 8 reps"},
+     {n:"Leg Press",s:2,r:"10-12",rest:"90s",w:60,u:"kg",p:"+weight when 12 reps"},
+     {n:"Romanian Deadlift",s:3,r:"8-10",rest:"120s",w:45,u:"kg",p:"+2.5-5 kg when 10 reps"},
+     {n:"Leg Curl",s:2,r:"10-12",rest:"75s",w:30,u:"kg",p:"+weight when 12 reps"},
+     {n:"Calf Raise",s:3,r:"12-15",rest:"60s",w:20,u:"kg",p:"increase slowly"}]
 };
 function getWorkouts(day){if(state.customWorkouts&&state.customWorkouts[day])return state.customWorkouts[day];return DEFAULT_WK[day]||[]}
 
@@ -1038,9 +1053,17 @@ function renderWorkout(){
 function renderHistory(){
   const p=document.getElementById('historyTab'),keys=Object.keys(state.sessions).sort().reverse();
   const logged=keys.filter(k=>{const s=state.sessions[k];return s.exercises&&s.exercises.some(e=>e.completed)});
-  if(!logged.length){p.innerHTML=`<div class="empty"><div class="ico"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div><p>No logged sessions yet.<br>Complete a workout and hit LOG SESSION!</p></div>`;return}
+  const ioBar=`<div class="hist-io"><button class="exp-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export XLSX</button><button class="imp-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import XLSX</button></div><input type="file" id="xlsxImport" accept=".xlsx,.xls" style="display:none">`;
+  if(!logged.length){
+    // Note: ioBar contains only static SVG/HTML with no user data — safe to use with innerHTML
+    p.innerHTML=ioBar+`<div class="empty"><div class="ico"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div><p>No logged sessions yet.<br>Complete a workout and hit LOG SESSION!</p></div>`;
+    p.querySelector('.imp-btn').addEventListener('click',()=>document.getElementById('xlsxImport').click());
+    document.getElementById('xlsxImport').addEventListener('change',importHistory);
+    return;
+  }
   const tc={upper:'var(--red)',lower:'var(--blue)',cardio:'var(--orange)',rest:'var(--text3)'},bg={upper:'var(--red-dim)',lower:'var(--blue-dim)',cardio:'var(--orange-dim)',rest:'var(--surface)'};
-  p.innerHTML=logged.map(key=>{
+  // Note: ioBar is static HTML, session data is escaped via esc() — safe innerHTML usage
+  p.innerHTML=ioBar+logged.map(key=>{
     const s=state.sessions[key],ds=key.split('_')[0],d=new Date(ds+'T00:00:00');
     const fmt=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}),ci=CYCLE[s.cycleDay-1];
     return`<div class="h-entry" data-k="${key}"><div class="h-date"><span>${fmt} &mdash; Day ${s.cycleDay}</span><div class="h-actions"><span class="h-tag" style="background:${bg[ci.type]};color:${tc[ci.type]}">${s.dayName}</span><button class="h-edit-btn" data-k="${key}">Edit</button><button class="del-btn" data-k="${key}" aria-label="Delete"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>
@@ -1052,6 +1075,9 @@ function renderHistory(){
         return`<div class="h-ex"><span class="nm">${esc(e.name)}</span><span class="st">${e.loggedWeight||'-'}x${e.loggedReps||'-'} ${e.unit||''}</span></div>`;
       }).join('')}</div></div>`;
   }).join('');
+  p.querySelector('.exp-btn').addEventListener('click',exportHistory);
+  p.querySelector('.imp-btn').addEventListener('click',()=>document.getElementById('xlsxImport').click());
+  document.getElementById('xlsxImport').addEventListener('change',importHistory);
   p.querySelectorAll('.del-btn').forEach(b=>{b.addEventListener('click',()=>{showModal('Delete Session','Delete this session permanently?',()=>{delete state.sessions[b.dataset.k];saveState(true);renderHistory();renderWorkout()})})});
   p.querySelectorAll('.h-edit-btn').forEach(b=>{b.addEventListener('click',()=>{
     // Cancel any other open edit — re-render first, then re-click this button
@@ -1092,6 +1118,76 @@ function renderHistory(){
       return`<div class="h-edit-set" data-oi="${oi}" data-si="0"><span class="nm">${esc(e.name)}</span><input data-hf="w" value="${e.loggedWeight||''}" placeholder="Wt" inputmode="decimal"><input data-hf="r" value="${e.loggedReps||''}" placeholder="Reps" inputmode="numeric"></div>`;
     }).join('');
   })});
+}
+
+// ═══ HISTORY EXPORT/IMPORT ═══
+function exportHistory(){
+  const keys=Object.keys(state.sessions).sort();
+  const rows=[];
+  keys.forEach(key=>{
+    const s=state.sessions[key];if(!s.exercises||!s.exercises.some(e=>e.completed))return;
+    const ds=key.split('_')[0],d=new Date(ds+'T00:00:00');
+    const date=d.toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit'});
+    s.exercises.filter(e=>e.completed).forEach(e=>{
+      if(e.sets&&e.sets.length){
+        e.sets.forEach((st,si)=>{
+          rows.push({Date:date,Day:s.cycleDay,DayName:s.dayName||'',Cycle:s.cycleCount||1,Exercise:e.name,Set:si+1,Weight:st.weight||'',Reps:st.reps||'',Unit:e.unit||'kg'});
+        });
+      } else {
+        rows.push({Date:date,Day:s.cycleDay,DayName:s.dayName||'',Cycle:s.cycleCount||1,Exercise:e.name,Set:1,Weight:e.loggedWeight||'',Reps:e.loggedReps||'',Unit:e.unit||'kg'});
+      }
+    });
+  });
+  if(!rows.length){showToast('No sessions to export');return}
+  const ws=XLSX.utils.json_to_sheet(rows);
+  ws['!cols']=[{wch:12},{wch:5},{wch:18},{wch:6},{wch:28},{wch:5},{wch:8},{wch:6},{wch:5}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'History');
+  XLSX.writeFile(wb,'GymBuddy_History.xlsx');
+  showToast('Exported '+rows.length+' rows');
+}
+function importHistory(ev){
+  const file=ev.target.files[0];if(!file)return;ev.target.value='';
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws);
+      if(!rows.length){showToast('Empty file');return}
+      // Validate required columns
+      const req=['Date','Exercise','Set','Weight','Reps'];
+      const cols=Object.keys(rows[0]);
+      const missing=req.filter(r=>!cols.includes(r));
+      if(missing.length){showToast('Missing columns: '+missing.join(', '));return}
+      // Group rows into sessions
+      const grouped={};
+      rows.forEach(r=>{
+        const dp=new Date(r.Date);if(isNaN(dp))return;
+        const ds=dp.toISOString().slice(0,10);
+        const day=parseInt(r.Day)||1,cycle=parseInt(r.Cycle)||1;
+        const skey=ds+'_D'+day;
+        if(!grouped[skey])grouped[skey]={date:dp.toISOString(),cycleDay:day,cycleCount:cycle,dayName:String(r.DayName||CYCLE[day-1].name),exercises:{}};
+        const exName=String(r.Exercise);
+        if(!grouped[skey].exercises[exName])grouped[skey].exercises[exName]={name:exName,unit:String(r.Unit||'kg'),sets:[]};
+        grouped[skey].exercises[exName].sets.push({weight:String(r.Weight||''),reps:String(r.Reps||'')});
+      });
+      let imported=0;
+      Object.keys(grouped).forEach(skey=>{
+        const g=grouped[skey];
+        const exArr=Object.values(g.exercises).map(ex=>({
+          name:ex.name,targetSets:ex.sets.length,targetReps:'',rest:'',startWeight:0,originalWeight:0,unit:ex.unit,progression:'',
+          sets:ex.sets,completed:true
+        }));
+        if(!state.sessions[skey]){
+          state.sessions[skey]={date:g.date,cycleDay:g.cycleDay,cycleCount:g.cycleCount,dayName:g.dayName,exercises:exArr};
+          imported++;
+        }
+      });
+      if(imported>0){saveState(true);renderHistory();renderWorkout()}
+      showToast(imported>0?'Imported '+imported+' sessions':"No new sessions (duplicates skipped)");
+    }catch(err){showToast('Error reading file')}
+  };
+  reader.readAsArrayBuffer(file);
 }
 
 // ═══ PROGRESS ═══
