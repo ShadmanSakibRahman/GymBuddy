@@ -1359,9 +1359,10 @@ document.getElementById('saveBtn').addEventListener('click',()=>{
     if(next===1)state.cycleCount=(state.cycleCount||1)+1;
     state.currentCycleDay=next;
     initSession();saveState(true);
+    render();
     const btn=document.getElementById('saveBtn');btn.textContent='SESSION LOGGED \u2713';btn.classList.add('saved');
     showToast(`Logged! ${cnt}/${sess.exercises.length} exercises`);
-    setTimeout(()=>{_logLocked=false;btn.textContent='LOG SESSION';btn.classList.remove('saved');render()},2000);
+    setTimeout(()=>{_logLocked=false;btn.textContent='LOG SESSION';btn.classList.remove('saved')},2000);
   },{confirmText:'Log it',positive:true});
 });
 
