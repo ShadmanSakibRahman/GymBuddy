@@ -839,6 +839,17 @@ function loadFromFirebase(){
       }
       state=fb;
     }
+    // One-time migration: clear stale customWorkouts from old plan so new defaults load
+    if(!state._pplMigrated){
+      state.customWorkouts={};
+      // Remove today's ghost session so it gets recreated with new defaults
+      const tk=todayKey();
+      if(state.sessions&&state.sessions[tk]){
+        const s=state.sessions[tk];
+        if(!s.exercises||!s.exercises.some(e=>e.completed||hasSetData(e)))delete state.sessions[tk];
+      }
+      state._pplMigrated=true;
+    }
     initSession();
     mergeSessionWithPlan(state.currentCycleDay);
     localStorage.setItem('gb_data',JSON.stringify(state));
