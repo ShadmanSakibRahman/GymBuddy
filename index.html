@@ -866,7 +866,7 @@ function loadFromFirebase(){
       // Push merged result back to Firebase once (in case local had offline sessions)
       fbReady=true;
       _writeCount++;
-      userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'));
+      userRef.set(state).then(()=>setSync('ok')).catch(()=>{_writeCount--;setSync('off')});
     }
     render();setSync('ok');
   },()=>{
@@ -889,13 +889,13 @@ function saveState(immediate){
   clearTimeout(_saveTimer);
   if(immediate){
     _writeCount++;
-    setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'));
+    setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>{_writeCount--;setSync('off')});
   } else {
-    _saveTimer=setTimeout(()=>{_writeCount++;setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'))},1000);
+    _saveTimer=setTimeout(()=>{_writeCount++;setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>{_writeCount--;setSync('off')})},1000);
   }
 }
 // Flush pending saves when user leaves page or app goes to background
-function flushPendingSave(){if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;if(userRef&&!guestMode&&fbReady){_writeCount++;userRef.set(state)}}}
+function flushPendingSave(){if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;if(userRef&&!guestMode&&fbReady){_writeCount++;userRef.set(state).catch(()=>{_writeCount--})}}}
 window.addEventListener('beforeunload',flushPendingSave);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushPendingSave()})
 function loadLocal(){
@@ -986,7 +986,7 @@ function initSession(){
   const key=todayKey();
   if(!state.sessions[key]){
     const exs=getWorkouts(state.currentCycleDay),last=lastSession(state.currentCycleDay);
-    state.sessions[key]={date:new Date().toISOString(),cycleDay:state.currentCycleDay,cycleCount:state.cycleCount,dayName:CYCLE[state.currentCycleDay-1].name,
+    state.sessions[key]={date:new Date().toISOString(),cycleDay:state.currentCycleDay,cycleCount:state.cycleCount,dayName:CYCLE[safeDay(state.currentCycleDay)-1].name,
       exercises:exs.map(ex=>{
         const le=last?last.exercises.find(e=>e.name===ex.n&&e.completed):null;
         const numSets=ex.u===''?Math.max(ex.s,0):(ex.s||1);
@@ -1351,7 +1351,7 @@ document.getElementById('resetBtn').addEventListener('click',()=>{showModal('Res
 // ═══ EDIT PANEL ═══
 let editingDay=null;
 function openEditPanel(day){
-  editingDay=day;document.getElementById('editTitle').textContent=`Edit Day ${day} — ${CYCLE[day-1].name}`;
+  editingDay=day;document.getElementById('editTitle').textContent=`Edit Day ${day} — ${CYCLE[safeDay(day)-1].name}`;
   document.getElementById('editErr').textContent='';renderEditExercises();document.getElementById('editPanel').classList.add('open');
 }
 function closeEditPanel(){document.getElementById('editPanel').classList.remove('open');editingDay=null}
