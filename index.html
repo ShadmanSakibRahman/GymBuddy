@@ -440,9 +440,7 @@ body::after{
 /* ═══ BOTTOM BAR ═══ */
 .bbar{
   display:none;
-  position:sticky;bottom:0;z-index:50;
-  padding:12px 0;
-  background:linear-gradient(to top,rgba(0,0,0,0.95) 60%,transparent);
+  padding:20px 0 0;
 }
 .log-btn{
   width:100%;max-width:100%;margin:0 auto;display:block;
@@ -1084,11 +1082,7 @@ function renderWorkout(){
     if(!ex.sets){const ns=ex.targetSets||1;ex.sets=[];for(let si=0;si<ns;si++)ex.sets.push({weight:ex.loggedWeight||'',reps:ex.loggedReps||''})}
     // Last session reference
     let li='';
-    if(has){
-      let lastInfo=lastDate;
-      if(le.sets&&le.sets.length){lastInfo+=': '+le.sets.map((s,si)=>`${s.weight||'-'}x${s.reps||'-'}`).join(', ')}
-      li=`<div class="ex-last">${esc(lastInfo)}</div>`;
-    }
+    if(has){li=`<div class="ex-last">Last session: ${lastDate}</div>`}
     // Per-set inputs
     const numSets=ex.sets.length;
     let setsHtml='';
