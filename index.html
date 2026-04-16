@@ -691,7 +691,7 @@ let currentUser=null,userRef=null,guestMode=false;
 
 // ═══ AUTH ═══
 // Handle redirect result on page load (for mobile Google sign-in)
-auth.getRedirectResult().catch(()=>{});
+auth.getRedirectResult().catch(e=>{if(e.code&&e.code!=='auth/credential-already-in-use')showLoginError('Sign-in failed. Please try again.')});
 
 document.getElementById('googleLoginBtn').addEventListener('click',async()=>{
   const p=new firebase.auth.GoogleAuthProvider();
@@ -762,20 +762,22 @@ auth.onAuthStateChanged(user=>{
       img.title=uName;img.referrerPolicy='no-referrer';
       av.replaceWith(img);
     } else {av.textContent=uName[0].toUpperCase();av.title=uName}
-    document.getElementById('userAvatar').addEventListener('click',()=>{showModal('Sign Out','Signed in as '+esc(uName)+'. Sign out?',()=>auth.signOut())});
+    document.getElementById('userAvatar').addEventListener('click',()=>{showModal('Sign Out','Signed in as '+uName+'. Sign out?',()=>auth.signOut())});
     loadFromFirebase();
   }else{
     // Clean up real-time listener on sign out
-    if(userRef&&_fbListener){userRef.off('value',_fbListener);_fbListener=null}
+    if(_fbListenerRef&&_fbListener){_fbListenerRef.off('value',_fbListener);_fbListener=null;_fbListenerRef=null}
     fbReady=false;currentUser=null;userRef=null;
     document.getElementById('loginScreen').classList.remove('out');document.getElementById('mainApp').classList.remove('on');document.getElementById('bottomBar').style.display='none';
   }
 });
 
 // ═══ SYNC ═══
-let fbReady=false;      // blocks Firebase writes until initial load completes
-let _skipRemote=false;  // prevents echo when our own write triggers the listener
-let _fbListener=null;   // real-time listener handle
+let fbReady=false;       // blocks Firebase writes until initial load completes
+let _writeCount=0;       // counts our writes — listener skips if it hasn't caught up
+let _listenCount=0;      // counts listener invocations we've skipped
+let _fbListener=null;    // real-time listener handle
+let _fbListenerRef=null; // ref the listener is attached to (for cleanup on user switch)
 
 function mergeSessions(local,remote){
   // Union merge: keep ALL sessions from both sides
@@ -823,10 +825,11 @@ function loadFromFirebase(){
 
   // Set up real-time listener (replaces one-time fetch)
   setSync('s');
-  if(_fbListener)userRef.off('value',_fbListener);
+  if(_fbListener&&_fbListenerRef){_fbListenerRef.off('value',_fbListener);_fbListener=null}
+  _fbListenerRef=userRef;_writeCount=0;_listenCount=0;
   _fbListener=userRef.on('value',snap=>{
     // Skip if this is an echo from our own write
-    if(_skipRemote){_skipRemote=false;setSync('ok');return}
+    if(_listenCount<_writeCount){_listenCount++;setSync('ok');return}
     const d=snap.val();
     const isInitial=!fbReady;
     if(d){
@@ -857,12 +860,12 @@ function loadFromFirebase(){
       state=fb;
     }
     initSession();
-    mergeSessionWithPlan(state.currentCycleDay);
+    if(isInitial)mergeSessionWithPlan(state.currentCycleDay);
     localStorage.setItem('gb_data',JSON.stringify(state));
     if(isInitial){
       // Push merged result back to Firebase once (in case local had offline sessions)
       fbReady=true;
-      _skipRemote=true;
+      _writeCount++;
       userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'));
     }
     render();setSync('ok');
@@ -885,14 +888,16 @@ function saveState(immediate){
   if(!fbReady||!userRef)return;
   clearTimeout(_saveTimer);
   if(immediate){
-    _skipRemote=true;
+    _writeCount++;
     setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'));
   } else {
-    _saveTimer=setTimeout(()=>{_skipRemote=true;setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'))},1000);
+    _saveTimer=setTimeout(()=>{_writeCount++;setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>setSync('off'))},1000);
   }
 }
-// Flush pending saves when user leaves page
-window.addEventListener('beforeunload',()=>{if(_saveTimer){clearTimeout(_saveTimer);if(userRef&&!guestMode&&fbReady){userRef.set(state)}}})
+// Flush pending saves when user leaves page or app goes to background
+function flushPendingSave(){if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;if(userRef&&!guestMode&&fbReady){_writeCount++;userRef.set(state)}}}
+window.addEventListener('beforeunload',flushPendingSave);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushPendingSave()})
 function loadLocal(){
   try{const r=localStorage.getItem('gb_data');if(r){const s=JSON.parse(r);if(!s.sessions)s.sessions={};if(!s.cycleCount)s.cycleCount=1;if(!s.customWorkouts)s.customWorkouts={};return s}}catch(e){}
   return defState();
@@ -961,6 +966,7 @@ function getWorkouts(day){if(state.customWorkouts&&state.customWorkouts[day])ret
 // ═══ STATE ═══
 let state=defState();
 function defState(){return{currentCycleDay:1,cycleCount:1,sessions:{},todaySession:null,customWorkouts:{}}}
+function safeDay(d){return(d>=1&&d<=7)?d:1}
 function todayKey(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}_C${state.cycleCount}_D${state.currentCycleDay}`}
 
 // ═══ CYCLE BAR ═══
@@ -998,7 +1004,7 @@ function initSession(){
 }
 function lastSession(cd){
   const tk=todayKey();
-  const dayName=CYCLE[cd-1].name;
+  const dayName=CYCLE[safeDay(cd)-1].name;
   // Find the most recent COMPLETED session for this day type
   // Match by day name (survives reordering) OR by day number
   const matches=Object.keys(state.sessions).filter(k=>{
@@ -1038,12 +1044,12 @@ function mergeSessionWithPlan(day){
     const sets=[];for(let si=0;si<numSets;si++){sets.push({weight:'',reps:''})}
     return{name:ex.n,targetSets:ex.s,targetReps:ex.r,rest:ex.rest,startWeight:cw,originalWeight:ex.w,unit:ex.u,progression:ex.p,sets:sets,completed:false};
   });
-  old.dayName=CYCLE[day-1].name;
+  old.dayName=CYCLE[safeDay(day)-1].name;
 }
 
 // ═══ RENDER WORKOUT ═══
 function renderWorkout(){
-  const ci=CYCLE[state.currentCycleDay-1],bn=document.getElementById('dayBanner');
+  const ci=CYCLE[safeDay(state.currentCycleDay)-1],bn=document.getElementById('dayBanner');
   bn.className=`banner ${ci.type}`;
   bn.innerHTML=`<div><div class="bt">Day ${ci.day} &mdash; ${ci.name}</div><div class="bs">${ci.focus} &middot; Cycle ${state.cycleCount}</div></div>
     <div style="display:flex;align-items:center;gap:8px"><button class="edit-btn" id="editWorkoutBtn" title="Edit exercises" aria-label="Edit exercises"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><span class="badge">${ci.type}</span></div>`;
@@ -1150,7 +1156,7 @@ function renderHistory(){
   p.innerHTML=ioBar+logged.map(key=>{
     const s=state.sessions[key],ds=key.split('_')[0],d=new Date(ds+'T00:00:00');
     const fmt=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}),ci=CYCLE[(s.cycleDay||1)-1]||CYCLE[0];
-    return`<div class="h-entry" data-k="${key}"><div class="h-date"><span>${fmt} &mdash; Day ${s.cycleDay}</span><div class="h-actions"><span class="h-tag" style="background:${bg[ci.type]};color:${tc[ci.type]}">${s.dayName}</span><button class="h-edit-btn" data-k="${key}">Edit</button><button class="del-btn" data-k="${key}" aria-label="Delete"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>
+    return`<div class="h-entry" data-k="${key}"><div class="h-date"><span>${fmt} &mdash; Day ${s.cycleDay}</span><div class="h-actions"><span class="h-tag" style="background:${bg[ci.type]||'var(--surface)'};color:${tc[ci.type]||'var(--text3)'}">${esc(s.dayName||'')}</span><button class="h-edit-btn" data-k="${key}">Edit</button><button class="del-btn" data-k="${key}" aria-label="Delete"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>
       <div class="h-exs" id="hexs-${key.replace(/[^a-zA-Z0-9]/g,'_')}">${s.exercises.filter(e=>e.completed).map(e=>{
         if(e.sets&&e.sets.length){
           const setsStr=e.sets.map((s,si)=>`${s.weight||'-'}x${s.reps||'-'}`).join(' / ');
@@ -1251,10 +1257,10 @@ function importHistory(ev){
       rows.forEach(r=>{
         const dp=new Date(r.Date);if(isNaN(dp))return;
         const ds=dp.toISOString().slice(0,10);
-        const day=parseInt(r.Day)||1,cycle=parseInt(r.Cycle)||1;
+        const day=Math.min(7,Math.max(1,parseInt(r.Day)||1)),cycle=Math.max(1,parseInt(r.Cycle)||1);
         const skey=ds+'_C'+cycle+'_D'+day;
-        if(!grouped[skey])grouped[skey]={date:dp.toISOString(),cycleDay:day,cycleCount:cycle,dayName:String(r.DayName||CYCLE[day-1].name),exercises:{}};
-        const exName=String(r.Exercise);
+        if(!grouped[skey])grouped[skey]={date:dp.toISOString(),cycleDay:day,cycleCount:cycle,dayName:String(r.DayName||CYCLE[day-1].name).slice(0,40),exercises:{}};
+        const exName=String(r.Exercise).slice(0,80);
         if(!grouped[skey].exercises[exName])grouped[skey].exercises[exName]={name:exName,unit:String(r.Unit||'kg'),sets:[]};
         grouped[skey].exercises[exName].sets.push({weight:String(r.Weight||''),reps:String(r.Reps||'')});
       });
@@ -1359,12 +1365,12 @@ function renderEditExercises(){
         <button class="edit-move-btn ${i===0?'dis':''}" data-i="${i}" data-dir="up" aria-label="Move up"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
         <button class="edit-move-btn ${i===len-1?'dis':''}" data-i="${i}" data-dir="down" aria-label="Move down"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
       </div>
-      <input type="text" value="${ex.n}" data-i="${i}" data-f="n" placeholder="Exercise name" maxlength="80">
+      <input type="text" value="${esc(ex.n)}" data-i="${i}" data-f="n" placeholder="Exercise name" maxlength="80">
       <button class="edit-ex-del" data-i="${i}" aria-label="Delete exercise"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
     </div>
-    <div class="edit-row"><div><label>Sets</label><input type="number" value="${ex.s}" data-i="${i}" data-f="s" min="0" max="20" placeholder="3"></div><div><label>Reps</label><input type="text" value="${ex.r}" data-i="${i}" data-f="r" placeholder="8-12"></div><div><label>Rest</label><input type="text" value="${ex.rest}" data-i="${i}" data-f="rest" placeholder="60s"></div></div>
-    <div class="edit-row r2"><div><label>Weight</label><input type="number" value="${ex.w}" data-i="${i}" data-f="w" min="0" step="0.5"></div><div><label>Unit</label><select data-i="${i}" data-f="u"><option value="kg" ${ex.u==='kg'?'selected':''}>kg</option><option value="BW" ${ex.u==='BW'?'selected':''}>BW</option><option value="lbs" ${ex.u==='lbs'?'selected':''}>lbs</option><option value="" ${ex.u===''?'selected':''}>None</option></select></div></div>
-    <div class="edit-row"><div style="grid-column:1/-1"><label>Progression</label><input type="text" value="${ex.p}" data-i="${i}" data-f="p" placeholder="+5 kg when 12 reps" maxlength="80"></div></div>
+    <div class="edit-row"><div><label>Sets</label><input type="number" value="${esc(''+ex.s)}" data-i="${i}" data-f="s" min="0" max="20" placeholder="3"></div><div><label>Reps</label><input type="text" value="${esc(ex.r)}" data-i="${i}" data-f="r" placeholder="8-12"></div><div><label>Rest</label><input type="text" value="${esc(ex.rest)}" data-i="${i}" data-f="rest" placeholder="60s"></div></div>
+    <div class="edit-row r2"><div><label>Weight</label><input type="number" value="${esc(''+ex.w)}" data-i="${i}" data-f="w" min="0" step="0.5"></div><div><label>Unit</label><select data-i="${i}" data-f="u"><option value="kg" ${ex.u==='kg'?'selected':''}>kg</option><option value="BW" ${ex.u==='BW'?'selected':''}>BW</option><option value="lbs" ${ex.u==='lbs'?'selected':''}>lbs</option><option value="" ${ex.u===''?'selected':''}>None</option></select></div></div>
+    <div class="edit-row"><div style="grid-column:1/-1"><label>Progression</label><input type="text" value="${esc(ex.p)}" data-i="${i}" data-f="p" placeholder="+5 kg when 12 reps" maxlength="80"></div></div>
   </div>`).join('');
   // Move buttons
   c.querySelectorAll('.edit-move-btn:not(.dis)').forEach(b=>{b.addEventListener('click',()=>{
