@@ -769,7 +769,11 @@ function loadFromFirebase(){
       if(local&&local.sessions){Object.keys(local.sessions).forEach(k=>{if(!fb.sessions[k])fb.sessions[k]=local.sessions[k]})}
       state=fb;
     }
-    initSession();saveState();render();setSync('ok');
+    initSession();
+    // Re-merge today's session with custom workouts from Firebase
+    // (session may have been created in Phase 1 with defaults before Firebase data arrived)
+    mergeSessionWithPlan(state.currentCycleDay);
+    saveState();render();setSync('ok');
   }).catch(()=>{setSync('off')});
 }
 function hideLoading(){
@@ -802,41 +806,58 @@ function setSync(s){const d=document.getElementById('syncDot');d.className='sync
 // DATA
 // ═══════════════════════════════════════════════
 const CYCLE=[
-  {day:1,name:"Upper Strength",type:"upper",focus:"Strength"},
-  {day:2,name:"Lower Strength",type:"lower",focus:"Strength"},
-  {day:3,name:"Cardio + Abs",type:"cardio",focus:"Cardio"},
-  {day:4,name:"Upper Hypertrophy",type:"upper",focus:"Hypertrophy"},
-  {day:5,name:"Lower Hypertrophy + Abs",type:"lower",focus:"Hypertrophy"},
-  {day:6,name:"Cardio",type:"cardio",focus:"Cardio"},
-  {day:7,name:"Rest Day",type:"rest",focus:"Recovery"},
+  {day:1,name:"Push A",type:"upper",focus:"Push"},
+  {day:2,name:"Pull A",type:"upper",focus:"Pull"},
+  {day:3,name:"Legs A",type:"lower",focus:"Legs"},
+  {day:4,name:"Active Recovery",type:"cardio",focus:"Cardio + Accessories"},
+  {day:5,name:"Push B",type:"upper",focus:"Push"},
+  {day:6,name:"Pull B",type:"upper",focus:"Pull"},
+  {day:7,name:"Legs B",type:"lower",focus:"Legs"},
 ];
 const DEFAULT_WK={
-  1:[{n:"Incline Chest Press",s:3,r:"6-10",rest:"90s",w:22,u:"kg",p:"+2.5 kg when 10 reps hit"},
-     {n:"Lat Pulldown",s:3,r:"6-10",rest:"90s",w:50,u:"kg",p:"+5 kg when 10 reps"},
-     {n:"Seated Row",s:2,r:"8-10",rest:"90s",w:67,u:"kg",p:"+5 kg when 10 reps"},
-     {n:"Shoulder Press",s:3,r:"6-10",rest:"90s",w:20,u:"kg",p:"+2.5 kg when 10 reps"},
-     {n:"Tricep Pushdown",s:2,r:"10-12",rest:"60s",w:51,u:"kg",p:"+2.5-5 kg when 12 reps"},
-     {n:"Bicep Curl",s:2,r:"10-12",rest:"60s",w:14,u:"kg",p:"+2 kg when 12 reps"}],
-  2:[{n:"Leg Press",s:4,r:"8-12",rest:"90s",w:65,u:"kg",p:"+10 kg when 12 reps"},
-     {n:"Hamstring Curl",s:3,r:"8-12",rest:"90s",w:50,u:"kg",p:"+5 kg when 12 reps"},
-     {n:"Leg Extension",s:3,r:"10-12",rest:"60s",w:70,u:"kg",p:"+5 kg when 12 reps"},
-     {n:"Calf Raise",s:3,r:"12-20",rest:"60s",w:0,u:"BW",p:"Add weight when 20 reps"}],
-  3:[{n:"Incline Walk",s:0,r:"20-25 min",rest:"-",w:0,u:"",p:""},
-     {n:"Hanging Leg Raise",s:3,r:"10-15",rest:"60s",w:0,u:"BW",p:"Add reps"},
-     {n:"Crunch",s:3,r:"15-20",rest:"60s",w:0,u:"BW",p:"Add reps"}],
-  4:[{n:"Chest Fly",s:3,r:"12-15",rest:"60s",w:45,u:"kg",p:"+5 kg when 15 reps"},
-     {n:"Lat Pulldown (light)",s:3,r:"10-12",rest:"60s",w:45,u:"kg",p:"+5 kg when 12 reps"},
-     {n:"Reverse Fly",s:3,r:"12-15",rest:"60s",w:40,u:"kg",p:"+2.5 kg when 15 reps"},
-     {n:"Lateral Raise",s:3,r:"15-20",rest:"45s",w:10,u:"kg",p:"+2 kg when 20 reps"},
-     {n:"Overhead Tricep",s:2,r:"12-15",rest:"60s",w:39,u:"kg",p:"+2.5-5 kg"},
-     {n:"Hammer Curl",s:2,r:"12-15",rest:"60s",w:16,u:"kg",p:"+2 kg"}],
-  5:[{n:"Leg Press",s:3,r:"12-15",rest:"90s",w:65,u:"kg",p:"+10 kg when 15 reps"},
-     {n:"Hamstring Curl",s:3,r:"12-15",rest:"60s",w:45,u:"kg",p:"+5 kg"},
-     {n:"Leg Extension",s:3,r:"12-15",rest:"60s",w:60,u:"kg",p:"+5 kg"},
-     {n:"Calf Raise",s:3,r:"15-20",rest:"60s",w:0,u:"BW",p:"Add weight"},
-     {n:"Leg Raise",s:3,r:"10-15",rest:"-",w:0,u:"BW",p:"Add reps"}],
-  6:[{n:"Steady Cardio",s:0,r:"25-30 min",rest:"-",w:0,u:"",p:"No HIIT (deficit)"}],
-  7:[]
+  1:[{n:"Bench Press",s:4,r:"6-8",rest:"120s",w:40,u:"kg",p:"+2.5 kg when 8 reps hit"},
+     {n:"Incline Dumbbell Press",s:3,r:"8-10",rest:"90s",w:16,u:"kg",p:"+2 kg when 10 reps"},
+     {n:"Cable Fly",s:2,r:"12-15",rest:"60s",w:10,u:"kg",p:"+2.5 kg when 15 reps"},
+     {n:"Overhead Press",s:3,r:"6-8",rest:"90s",w:20,u:"kg",p:"+2.5 kg when 8 reps"},
+     {n:"Lateral Raise",s:4,r:"12-15",rest:"45s",w:10,u:"kg",p:"+2 kg when 15 reps"},
+     {n:"Rear Delt Fly",s:2,r:"12-15",rest:"60s",w:8,u:"kg",p:"+2 kg when 15 reps"},
+     {n:"Tricep Pushdown",s:3,r:"10-12",rest:"60s",w:25,u:"kg",p:"+2.5 kg when 12 reps"}],
+  2:[{n:"Pull-ups",s:3,r:"AMRAP",rest:"90s",w:0,u:"BW",p:"Add reps"},
+     {n:"Lat Pulldown",s:3,r:"8-10",rest:"90s",w:50,u:"kg",p:"+5 kg when 10 reps"},
+     {n:"Row",s:3,r:"6-8",rest:"90s",w:40,u:"kg",p:"+5 kg when 8 reps"},
+     {n:"Seated Row",s:2,r:"10-12",rest:"90s",w:45,u:"kg",p:"+5 kg when 12 reps"},
+     {n:"Face Pull",s:2,r:"12-15",rest:"60s",w:15,u:"kg",p:"+2.5 kg when 15 reps"},
+     {n:"Barbell Curl",s:3,r:"8-10",rest:"60s",w:20,u:"kg",p:"+2.5 kg when 10 reps"},
+     {n:"Hammer Curl",s:2,r:"10-12",rest:"60s",w:12,u:"kg",p:"+2 kg when 12 reps"}],
+  3:[{n:"Squat",s:4,r:"6-8",rest:"120s",w:40,u:"kg",p:"+5 kg when 8 reps"},
+     {n:"Leg Press",s:2,r:"10-12",rest:"90s",w:65,u:"kg",p:"+10 kg when 12 reps"},
+     {n:"Romanian Deadlift",s:3,r:"8-10",rest:"90s",w:40,u:"kg",p:"+5 kg when 10 reps"},
+     {n:"Leg Curl",s:2,r:"10-12",rest:"60s",w:35,u:"kg",p:"+5 kg when 12 reps"},
+     {n:"Calf Raise",s:3,r:"12-15",rest:"60s",w:0,u:"BW",p:"Add weight when 15 reps"}],
+  4:[{n:"Cardio",s:0,r:"15-20 min",rest:"-",w:0,u:"",p:""},
+     {n:"Cable Crunch",s:3,r:"12-15",rest:"60s",w:20,u:"kg",p:"+2.5 kg when 15 reps"},
+     {n:"Band Pull-Aparts",s:2,r:"15-20",rest:"45s",w:0,u:"BW",p:"Add reps"},
+     {n:"Overhead Tricep Extension",s:2,r:"12-15",rest:"60s",w:15,u:"kg",p:"+2.5 kg when 15 reps"}],
+  5:[{n:"Bench Press",s:3,r:"6-8",rest:"120s",w:40,u:"kg",p:"+2.5 kg when 8 reps"},
+     {n:"Incline Dumbbell Press",s:3,r:"8-10",rest:"90s",w:16,u:"kg",p:"+2 kg when 10 reps"},
+     {n:"Cable Fly",s:2,r:"12-15",rest:"60s",w:10,u:"kg",p:"+2.5 kg when 15 reps"},
+     {n:"Overhead Press",s:3,r:"6-8",rest:"90s",w:20,u:"kg",p:"+2.5 kg when 8 reps"},
+     {n:"Lateral Raise",s:3,r:"12-15",rest:"45s",w:10,u:"kg",p:"+2 kg when 15 reps"},
+     {n:"Rear Delt Fly",s:2,r:"12-15",rest:"60s",w:8,u:"kg",p:"+2 kg when 15 reps"},
+     {n:"Tricep Pushdown",s:3,r:"10-12",rest:"60s",w:25,u:"kg",p:"+2.5 kg when 12 reps"}],
+  6:[{n:"Pull-ups",s:3,r:"AMRAP",rest:"90s",w:0,u:"BW",p:"Add reps"},
+     {n:"Lat Pulldown",s:3,r:"8-10",rest:"90s",w:50,u:"kg",p:"+5 kg when 10 reps"},
+     {n:"Row",s:3,r:"6-8",rest:"90s",w:40,u:"kg",p:"+5 kg when 8 reps"},
+     {n:"Seated Row",s:2,r:"10-12",rest:"90s",w:45,u:"kg",p:"+5 kg when 12 reps"},
+     {n:"Face Pull",s:2,r:"12-15",rest:"60s",w:15,u:"kg",p:"+2.5 kg when 15 reps"},
+     {n:"Barbell Curl",s:3,r:"8-10",rest:"60s",w:20,u:"kg",p:"+2.5 kg when 10 reps"},
+     {n:"Hammer Curl",s:2,r:"10-12",rest:"60s",w:12,u:"kg",p:"+2 kg when 12 reps"},
+     {n:"Cardio",s:0,r:"15-20 min",rest:"-",w:0,u:"",p:""}],
+  7:[{n:"Squat",s:3,r:"6-8",rest:"120s",w:40,u:"kg",p:"+5 kg when 8 reps"},
+     {n:"Leg Press",s:2,r:"10-12",rest:"90s",w:65,u:"kg",p:"+10 kg when 12 reps"},
+     {n:"Romanian Deadlift",s:3,r:"8-10",rest:"90s",w:40,u:"kg",p:"+5 kg when 10 reps"},
+     {n:"Leg Curl",s:2,r:"10-12",rest:"60s",w:35,u:"kg",p:"+5 kg when 12 reps"},
+     {n:"Calf Raise",s:3,r:"12-15",rest:"60s",w:0,u:"BW",p:"Add weight when 15 reps"}]
 };
 function getWorkouts(day){if(state.customWorkouts&&state.customWorkouts[day])return state.customWorkouts[day];return DEFAULT_WK[day]||[]}
 
