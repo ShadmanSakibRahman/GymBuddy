@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#000000">
 <meta name="mobile-web-app-capable" content="yes">
 <title>GymBuddy — Your Workout Companion</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230A84FF'/%3E%3Cg fill='none' stroke='%23fff' stroke-width='5' stroke-linecap='round'%3E%3Cpath d='M18 20v24M46 20v24M10 26v12M54 26v12M18 32h28'/%3E%3C/g%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
@@ -13,14 +14,12 @@
 <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="dns-prefetch" href="https://apis.google.com">
-<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <link rel="dns-prefetch" href="https://securetoken.googleapis.com">
-<link rel="preload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" as="script" crossorigin="anonymous">
-<link rel="preload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" as="script" crossorigin="anonymous">
-<link rel="preload" href="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js" as="script" crossorigin="anonymous">
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" crossorigin="anonymous"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" crossorigin="anonymous"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js" crossorigin="anonymous"></script>
+<link rel="dns-prefetch" href="https://cdn.sheetjs.com">
+<!-- Firebase is deferred so the login screen paints before the SDK downloads. XLSX loads on demand (Export/Import). -->
+<script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js" crossorigin="anonymous"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js" crossorigin="anonymous"></script>
+<script defer src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js" crossorigin="anonymous"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -680,238 +679,9 @@ body::after{
 </div>
 
 <script>
+'use strict';
 // ═══════════════════════════════════════════════
-// FIREBASE
-// ═══════════════════════════════════════════════
-firebase.initializeApp({
-  apiKey:"AIzaSyCCHE_1TX8VeAmNwoHRs2MunA5pFa5LIaY",
-  authDomain:"gymbuddy-9d596.firebaseapp.com",
-  databaseURL:"https://gymbuddy-9d596-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId:"gymbuddy-9d596",
-  storageBucket:"gymbuddy-9d596.firebasestorage.app",
-  messagingSenderId:"949020636436",
-  appId:"1:949020636436:web:58b78b6c108ddaaaf97e01"
-});
-const auth=firebase.auth(),db=firebase.database();
-let currentUser=null,userRef=null,guestMode=false;
-
-// ═══ AUTH ═══
-// Handle redirect result on page load (for mobile Google sign-in)
-auth.getRedirectResult().catch(e=>{if(e.code&&e.code!=='auth/credential-already-in-use')showLoginError('Sign-in failed. Please try again.')});
-
-document.getElementById('googleLoginBtn').addEventListener('click',async()=>{
-  const p=new firebase.auth.GoogleAuthProvider();
-  showLoginLoading(true);
-  try{await auth.signInWithPopup(p)}
-  catch(e){
-    // Popup failed — try redirect on mobile, show error on desktop
-    if(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)){
-      try{auth.signInWithRedirect(p)}catch(e2){showLoginError('Sign-in failed. Try email instead.');showLoginLoading(false)}
-    } else {
-      showLoginError(e.code==='auth/popup-blocked'?'Allow popups and try again.':'Sign-in failed. Try email instead.');
-      showLoginLoading(false);
-    }
-  }
-});
-let isSignUp=false;
-document.getElementById('toggleSignUp').addEventListener('click',()=>{
-  isSignUp=!isSignUp;
-  document.getElementById('toggleSignUp').textContent=isSignUp?'Already have an account? Sign in':"Don't have an account? Sign up";
-  document.getElementById('emailLoginBtn').textContent=isSignUp?'SIGN UP':'SIGN IN';
-  document.getElementById('loginError').textContent='';
-});
-document.getElementById('emailLoginBtn').addEventListener('click',async()=>{
-  const email=document.getElementById('emailInput').value.trim(),pass=document.getElementById('passwordInput').value;
-  if(!email||!pass){showLoginError('Enter email and password');return}
-  if(pass.length<6){showLoginError('Password must be 6+ characters');return}
-  try{showLoginLoading(true);
-    if(isSignUp)await auth.createUserWithEmailAndPassword(email,pass);
-    else await auth.signInWithEmailAndPassword(email,pass);
-  }catch(e){
-    const m={'auth/user-not-found':'Invalid email or password.','auth/wrong-password':'Invalid email or password.',
-      'auth/email-already-in-use':'Could not create account. Try signing in.','auth/invalid-email':'Invalid email address.',
-      'auth/too-many-requests':'Too many attempts. Try again later.'};
-    showLoginError(m[e.code]||'Something went wrong. Try again.');showLoginLoading(false);
-  }
-});
-document.getElementById('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')document.getElementById('emailLoginBtn').click()});
-// Guest mode
-document.getElementById('guestBtn').addEventListener('click',()=>{
-  guestMode=true;
-  document.getElementById('loginScreen').classList.add('out');
-  document.getElementById('mainApp').classList.add('on');
-  // Set avatar to guest
-  const av=document.getElementById('userAvatar');
-  av.textContent='G';av.title='Guest (local only)';
-  av.addEventListener('click',()=>{showModal('Guest Mode','Data is saved locally. Sign in to sync across devices.',()=>{
-    guestMode=false;document.getElementById('loginScreen').classList.remove('out');document.getElementById('mainApp').classList.remove('on');
-  })});
-  document.getElementById('syncDot').style.display='none';
-  state=loadLocal();runPplMigration(state);initSession();saveState();render();hideLoading();
-});
-
-function showLoginError(m){document.getElementById('loginError').textContent=m}
-function showLoginLoading(s){document.getElementById('loginLoading').style.display=s?'block':'none';document.getElementById('googleLoginBtn').style.opacity=s?'.5':'1';document.getElementById('emailLoginBtn').style.opacity=s?'.5':'1'}
-
-auth.onAuthStateChanged(user=>{
-  if(user){
-    guestMode=false;
-    currentUser=user;userRef=db.ref('users/'+user.uid);
-    document.getElementById('loginScreen').classList.add('out');
-    document.getElementById('mainApp').classList.add('on');showLoginLoading(false);
-    document.getElementById('syncDot').style.display='';
-    const av=document.getElementById('userAvatar');
-    const uName=user.displayName||user.email||'?';
-    if(user.photoURL){
-      const img=document.createElement('img');
-      img.src=user.photoURL;img.className='avatar';img.id='userAvatar';
-      img.title=uName;img.referrerPolicy='no-referrer';
-      av.replaceWith(img);
-    } else {av.textContent=uName[0].toUpperCase();av.title=uName}
-    document.getElementById('userAvatar').addEventListener('click',()=>{showModal('Sign Out','Signed in as '+uName+'. Sign out?',()=>auth.signOut())});
-    loadFromFirebase();
-  }else{
-    // Clean up real-time listener on sign out
-    if(_fbListenerRef&&_fbListener){_fbListenerRef.off('value',_fbListener);_fbListener=null;_fbListenerRef=null}
-    fbReady=false;currentUser=null;userRef=null;
-    document.getElementById('loginScreen').classList.remove('out');document.getElementById('mainApp').classList.remove('on');document.getElementById('bottomBar').style.display='none';
-  }
-});
-
-// ═══ SYNC ═══
-let fbReady=false;       // blocks Firebase writes until initial load completes
-let _writeCount=0;       // counts our writes — listener skips if it hasn't caught up
-let _listenCount=0;      // counts listener invocations we've skipped
-let _fbListener=null;    // real-time listener handle
-let _fbListenerRef=null; // ref the listener is attached to (for cleanup on user switch)
-
-function mergeSessions(local,remote){
-  // Union merge: keep ALL sessions from both sides
-  // For conflicts (same key), keep the version with more completed exercises (= more data logged)
-  const merged=Object.assign({},remote);
-  Object.keys(local).forEach(k=>{
-    if(!merged[k]){merged[k]=local[k];return}
-    // Both have this session — keep the one with more completed data
-    const lComp=local[k].exercises?local[k].exercises.filter(e=>e.completed).length:0;
-    const rComp=merged[k].exercises?merged[k].exercises.filter(e=>e.completed).length:0;
-    if(lComp>rComp)merged[k]=local[k];
-    else if(lComp===rComp){
-      // Same completed count — keep the one with more set data filled in
-      const lData=local[k].exercises?local[k].exercises.reduce((sum,e)=>sum+(e.sets?e.sets.filter(s=>s.weight||s.reps).length:0),0):0;
-      const rData=merged[k].exercises?merged[k].exercises.reduce((sum,e)=>sum+(e.sets?e.sets.filter(s=>s.weight||s.reps).length:0),0):0;
-      if(lData>rData)merged[k]=local[k];
-    }
-  });
-  return merged;
-}
-function mergeCustomWorkouts(local,remote){
-  // Union merge: keep all days from both, remote wins for conflicts
-  const merged=Object.assign({},local,remote);
-  return merged;
-}
-function runPplMigration(obj){
-  // One-time migration: clear stale customWorkouts from old plan so new PPL defaults load
-  if(obj._pplMigrated)return;
-  obj.customWorkouts={};
-  // Remove today's ghost session so it gets recreated with new defaults
-  const tk=todayKey();
-  if(obj.sessions&&obj.sessions[tk]){
-    const s=obj.sessions[tk];
-    if(!s.exercises||!s.exercises.some(e=>e.completed||hasSetData(e)))delete obj.sessions[tk];
-  }
-  obj._pplMigrated=true;
-}
-function loadFromFirebase(){
-  fbReady=false;
-  // Migrate localStorage BEFORE first render so Phase 1 shows correct exercises
-  state=loadLocal();
-  runPplMigration(state);
-  localStorage.setItem('gb_data',JSON.stringify(state));
-  initSession();render();hideLoading();
-
-  // Set up real-time listener (replaces one-time fetch)
-  setSync('s');
-  if(_fbListener&&_fbListenerRef){_fbListenerRef.off('value',_fbListener);_fbListener=null}
-  _fbListenerRef=userRef;_writeCount=0;_listenCount=0;
-  _fbListener=userRef.on('value',snap=>{
-    // Skip if this is an echo from our own write
-    if(_listenCount<_writeCount){_listenCount++;setSync('ok');return}
-    const d=snap.val();
-    const isInitial=!fbReady;
-    if(d){
-      const fb=d;if(!fb.sessions)fb.sessions={};if(!fb.cycleCount)fb.cycleCount=1;if(!fb.customWorkouts)fb.customWorkouts={};if(!fb.currentCycleDay||fb.currentCycleDay<1||fb.currentCycleDay>7)fb.currentCycleDay=1;
-      // Run migration on Firebase data BEFORE any merging
-      runPplMigration(fb);
-      if(isInitial){
-        // INITIAL LOAD: merge local + Firebase to preserve any offline work
-        // (local is already migrated above, so no stale customWorkouts leak in)
-        const local=loadLocal();
-        fb.sessions=mergeSessions(local.sessions||{},fb.sessions);
-        fb.customWorkouts=mergeCustomWorkouts(local.customWorkouts||{},fb.customWorkouts);
-      }
-      if(!isInitial){
-        // Subsequent remote update (other device wrote, or reconnect after offline)
-        // Preserve ONLY today's in-progress session from local state
-        // (handles offline edits without resurrecting deleted sessions)
-        const tk=todayKey();
-        if(state.sessions&&state.sessions[tk]&&!fb.sessions[tk]){
-          fb.sessions[tk]=state.sessions[tk];
-        } else if(state.sessions&&state.sessions[tk]&&fb.sessions[tk]){
-          // Both have today's session — keep the one with more data
-          const lComp=state.sessions[tk].exercises?state.sessions[tk].exercises.filter(e=>e.completed).length:0;
-          const rComp=fb.sessions[tk].exercises?fb.sessions[tk].exercises.filter(e=>e.completed).length:0;
-          if(lComp>rComp)fb.sessions[tk]=state.sessions[tk];
-        }
-      }
-      state=fb;
-    }
-    initSession();
-    if(isInitial)mergeSessionWithPlan(state.currentCycleDay);
-    localStorage.setItem('gb_data',JSON.stringify(state));
-    if(isInitial){
-      // Push merged result back to Firebase once (in case local had offline sessions)
-      fbReady=true;
-      _writeCount++;
-      userRef.set(state).then(()=>setSync('ok')).catch(()=>{_writeCount--;setSync('off')});
-    }
-    render();setSync('ok');
-  },()=>{
-    // Listener error / offline — allow local use, don't overwrite anything
-    fbReady=true;
-    setSync('off');
-  });
-}
-function hideLoading(){
-  const el=document.getElementById('appLoading');if(el)el.style.display='none';
-  document.getElementById('cycleBar').style.display='';
-  document.querySelectorAll('.tabs').forEach(t=>t.style.display='');
-}
-let _saveTimer=null;
-function saveState(immediate){
-  localStorage.setItem('gb_data',JSON.stringify(state));
-  if(guestMode)return;
-  // Block Firebase writes until initial load completes — prevents empty state overwriting real data
-  if(!fbReady||!userRef)return;
-  clearTimeout(_saveTimer);
-  if(immediate){
-    _writeCount++;
-    setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>{_writeCount--;setSync('off')});
-  } else {
-    _saveTimer=setTimeout(()=>{_writeCount++;setSync('s');userRef.set(state).then(()=>setSync('ok')).catch(()=>{_writeCount--;setSync('off')})},1000);
-  }
-}
-// Flush pending saves when user leaves page or app goes to background
-function flushPendingSave(){if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;if(userRef&&!guestMode&&fbReady){_writeCount++;userRef.set(state).catch(()=>{_writeCount--})}}}
-window.addEventListener('beforeunload',flushPendingSave);
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushPendingSave()})
-function loadLocal(){
-  try{const r=localStorage.getItem('gb_data');if(r){const s=JSON.parse(r);if(!s.sessions)s.sessions={};if(!s.cycleCount)s.cycleCount=1;if(!s.customWorkouts)s.customWorkouts={};return s}}catch(e){}
-  return defState();
-}
-function setSync(s){const d=document.getElementById('syncDot');d.className='sync'+(s==='s'?' s':s==='off'?' off':'');const t=s==='ok'?'Synced':s==='s'?'Syncing...':'Offline';d.title=t;d.setAttribute('aria-label',t)}
-
-// ═══════════════════════════════════════════════
-// DATA
+// PLAN DATA
 // ═══════════════════════════════════════════════
 const CYCLE=[
   {day:1,name:"Push A",type:"upper",focus:"Push"},
@@ -967,289 +737,513 @@ const DEFAULT_WK={
      {n:"Leg Curl",s:2,r:"10-12",rest:"75s",w:30,u:"kg",p:"+weight when 12 reps"},
      {n:"Calf Raise",s:3,r:"12-15",rest:"60s",w:20,u:"kg",p:"increase slowly"}]
 };
-function getWorkouts(day){if(state.customWorkouts&&state.customWorkouts[day])return state.customWorkouts[day];return DEFAULT_WK[day]||[]}
+const CHECK_SVG='<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+const NUM_RE=/^\d+(\.\d+)?$/; // only plain numbers get auto-filled from placeholders (not "6-8", "AMRAP", "BW")
+const $=id=>document.getElementById(id);
 
-// ═══ STATE ═══
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+// A session is "logged" ONLY when the user presses LOG SESSION. Checking off exercises
+// (manually or via auto-tick when all reps are typed) never logs anything by itself.
 let state=defState();
-function defState(){return{currentCycleDay:1,cycleCount:1,sessions:{},todaySession:null,customWorkouts:{}}}
-function safeDay(d){return(d>=1&&d<=7)?d:1}
-function todayKey(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}_C${state.cycleCount}_D${state.currentCycleDay}`}
+let auth=null,db=null,currentUser=null,userRef=null,guestMode=false;
+const LS_LEGACY='gb_data';let lsKey='gb_data_guest'; // storage is per account so devices shared between accounts don't mix data
 
-// ═══ CYCLE BAR ═══
-function renderCycle(){
-  const bar=document.getElementById('cycleBar');
-  bar.innerHTML=CYCLE.map(c=>{
-    const on=c.day===state.currentCycleDay?'on':'';
-    const isRest=c.type==='rest';
-    const lbl=isRest?'REST':c.focus.split(' ')[0].slice(0,4).toUpperCase();
-    return`<div class="cd ${isRest?'rest':''} ${on}" data-day="${c.day}"><span class="n">${c.day}</span><span class="l">${lbl}</span></div>`;
-  }).join('');
-  bar.querySelectorAll('.cd').forEach(el=>{el.addEventListener('click',()=>{
-    const newDay=parseInt(el.dataset.day);if(newDay===state.currentCycleDay)return;
-    const key=state.todaySession,sess=key?state.sessions[key]:null;
-    const hasData=sess&&sess.exercises&&sess.exercises.some(e=>hasSetData(e));
-    function doSwitch(){cleanGhostSession();state.currentCycleDay=newDay;initSession();saveState(true);render()}
-    if(hasData&&!sess.exercises.some(e=>e.completed)){showModal('Switch Day','You have unsaved data. Switch day and discard it?',doSwitch)}
-    else doSwitch();
-  })});
+function defState(){return{currentCycleDay:1,cycleCount:1,sessions:{},todaySession:null,customWorkouts:{}}}
+function safeDay(d){d=parseInt(d);return(d>=1&&d<=7)?d:1}
+function dayInfo(d){return CYCLE[safeDay(d)-1]}
+function getWorkouts(day){const c=state.customWorkouts&&state.customWorkouts[day];return Array.isArray(c)?c:(DEFAULT_WK[day]||[])}
+function fmtDate(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function newSessionKey(){let k=fmtDate(new Date())+'_C'+state.cycleCount+'_D'+state.currentCycleDay;if(state.sessions[k])k+='_'+Date.now();return k}
+function sessionTime(k,s){if(s&&s.date){const t=Date.parse(s.date);if(!isNaN(t))return t}const m=/^(\d{4}-\d{2}-\d{2})/.exec(k||'');return m?new Date(m[1]+'T00:00:00').getTime():0}
+function sessionDate(k,s){return new Date(sessionTime(k,s))}
+function hasSetData(ex){if(!ex)return false;if(Array.isArray(ex.sets))return ex.sets.some(s=>s&&(s.weight||s.reps));return !!(ex.loggedWeight||ex.loggedReps)}
+function sessionHasData(s){return !!(s&&Array.isArray(s.exercises)&&s.exercises.some(hasSetData))}
+function hasCompleted(s){return !!(s&&Array.isArray(s.exercises)&&s.exercises.some(e=>e&&e.completed))}
+// Conflict score for merging the same session from two devices: logged beats unlogged, then more typed sets, then more checkmarks.
+function sessionScore(s){
+  if(!s||!Array.isArray(s.exercises))return 0;
+  let sets=0,comp=0;
+  s.exercises.forEach(e=>{if(!e)return;if(e.completed)comp++;if(Array.isArray(e.sets))sets+=e.sets.filter(x=>x&&(x.weight||x.reps)).length;else if(e.loggedWeight||e.loggedReps)sets++});
+  return(s.logged?1e6:0)+sets*100+comp;
+}
+function isActiveFor(s,cc,cd){return !!(s&&!s.logged&&s.cycleCount===cc&&s.cycleDay===cd)}
+
+// Coerce anything loaded from localStorage/Firebase into a valid shape.
+function normalize(s){
+  if(!s||typeof s!=='object')s=defState();
+  if(!s.sessions||typeof s.sessions!=='object')s.sessions={};
+  if(!s.customWorkouts||typeof s.customWorkouts!=='object')s.customWorkouts={};
+  s.cycleCount=Math.max(1,parseInt(s.cycleCount)||1);
+  s.currentCycleDay=safeDay(s.currentCycleDay);
+  if(typeof s.todaySession!=='string')s.todaySession=null;
+  Object.keys(s.sessions).forEach(k=>{
+    const x=s.sessions[k];
+    if(!x||typeof x!=='object'){delete s.sessions[k];return}
+    x.cycleDay=safeDay(x.cycleDay);x.cycleCount=Math.max(1,parseInt(x.cycleCount)||1);
+    // Firebase can return sparse arrays with null holes — drop them once here so no render path has to care.
+    x.exercises=(Array.isArray(x.exercises)?x.exercises:[]).filter(e=>e&&typeof e==='object');
+    x.exercises.forEach(e=>{if(e.sets!=null)e.sets=(Array.isArray(e.sets)?e.sets:[]).filter(st=>st&&typeof st==='object')});
+    // Data written before the explicit flag existed: every past/archived session with a checkmark
+    // was shown as logged, so keep it that way; the active session is in-progress.
+    if(typeof x.logged!=='boolean')x.logged=k!==s.todaySession&&hasCompleted(x);
+  });
+  return s;
 }
 
 // ═══ SESSION ═══
+// The active session is identified by cycle position (cycle N, day D) + "not logged yet", never by date.
+// So closing, refreshing, crossing midnight or switching days and back always brings the same numbers back.
 function initSession(){
-  const key=todayKey();
-  // If session exists but was already logged, archive it and start fresh
-  if(state.sessions[key]&&state.sessions[key].exercises&&state.sessions[key].exercises.some(e=>e.completed)){
-    const old=state.sessions[key];
-    state.sessions[key+'_'+Date.now()]=old;
-    delete state.sessions[key];
+  const cc=state.cycleCount,cd=state.currentCycleDay;
+  let key=state.todaySession;
+  if(!isActiveFor(state.sessions[key],cc,cd)){
+    const cands=Object.keys(state.sessions).filter(k=>isActiveFor(state.sessions[k],cc,cd));
+    cands.sort((a,b)=>(sessionHasData(state.sessions[b])-sessionHasData(state.sessions[a]))||(sessionTime(b,state.sessions[b])-sessionTime(a,state.sessions[a])));
+    key=cands[0]||null;
   }
-  if(!state.sessions[key]){
-    const exs=getWorkouts(state.currentCycleDay),last=lastSession(state.currentCycleDay);
-    state.sessions[key]={date:new Date().toISOString(),cycleDay:state.currentCycleDay,cycleCount:state.cycleCount,dayName:CYCLE[safeDay(state.currentCycleDay)-1].name,
-      exercises:exs.map(ex=>{
-        const le=last?last.exercises.find(e=>e.name===ex.n&&e.completed):null;
-        const numSets=ex.u===''?Math.max(ex.s,0):(ex.s||1);
-        // Carry forward last session's weights per set
-        const sets=[];
-        for(let si=0;si<numSets;si++){
-          const lastSet=le&&le.sets&&le.sets[si]?le.sets[si]:null;
-          sets.push({weight:'',reps:''});
-        }
-        const cw=le&&le.sets&&le.sets[0]&&le.sets[0].weight?parseFloat(le.sets[0].weight):ex.w;
-        return{name:ex.n,targetSets:ex.s,targetReps:ex.r,rest:ex.rest,startWeight:cw,originalWeight:ex.w,unit:ex.u,progression:ex.p,sets:sets,completed:false};
-      })};
+  if(!key){
+    key=newSessionKey();
+    state.sessions[key]={date:new Date().toISOString(),cycleDay:cd,cycleCount:cc,dayName:dayInfo(cd).name,logged:false,exercises:[]};
   }
   state.todaySession=key;
+  reconcileWithPlan(state.sessions[key]);
+  pruneEmptySessions();
+}
+function pruneEmptySessions(){
+  Object.keys(state.sessions).forEach(k=>{
+    if(k===state.todaySession)return;
+    const s=state.sessions[k];
+    if(!s.logged&&!sessionHasData(s)&&!hasCompleted(s))delete state.sessions[k];
+  });
+}
+function buildExercise(ex,last,old){
+  const le=last?last.exercises.find(e=>e&&e.name===ex.n&&e.completed):null;
+  const n=parseInt(ex.s);const numSets=ex.u===''?Math.max(n||0,0):(n||1);
+  const sets=[];
+  for(let si=0;si<numSets;si++){
+    let o=null;
+    if(old){if(Array.isArray(old.sets))o=old.sets[si];else if(si===0&&(old.loggedWeight||old.loggedReps))o={weight:old.loggedWeight,reps:old.loggedReps}}
+    sets.push({weight:o&&o.weight!=null?String(o.weight):'',reps:o&&o.reps!=null?String(o.reps):''});
+  }
+  const lw=le&&Array.isArray(le.sets)&&le.sets[0]?parseFloat(le.sets[0].weight):NaN;
+  return{name:ex.n,targetSets:ex.s,targetReps:ex.r,rest:ex.rest,startWeight:isNaN(lw)?ex.w:lw,originalWeight:ex.w,unit:ex.u,progression:ex.p,sets:sets,completed:!!(old&&old.completed)};
+}
+// Align the active session with the current plan for its day, keeping any typed data by exercise name.
+function reconcileWithPlan(s){
+  const plan=getWorkouts(s.cycleDay),last=lastSession(s.cycleDay),old=Array.isArray(s.exercises)?s.exercises:[];
+  s.exercises=plan.map(ex=>buildExercise(ex,last,old.find(e=>e&&e.name===ex.n)));
+  s.dayName=dayInfo(s.cycleDay).name;
 }
 function lastSession(cd){
-  const tk=todayKey();
-  const dayName=CYCLE[safeDay(cd)-1].name;
-  // Find the most recent COMPLETED session for this day type
-  // Match by day name (survives reordering) OR by day number
-  const matches=Object.keys(state.sessions).filter(k=>{
-    if(k===tk)return false;
-    const s=state.sessions[k];
-    // Must have at least one completed exercise
-    if(!s.exercises||!s.exercises.some(e=>e.completed))return false;
-    if(s.dayName===dayName)return true;
-    const m=k.match(/_D(\d+)$/);
-    return m&&parseInt(m[1])===cd;
-  }).sort().reverse();
-  return matches.length>0?state.sessions[matches[0]]:null;
-}
-function cleanGhostSession(){
-  const key=state.todaySession;if(!key||!state.sessions[key])return;
-  const s=state.sessions[key];
-  if(!s.exercises||!s.exercises.some(e=>e.completed||hasSetData(e)))delete state.sessions[key];
-}
-function hasSetData(ex){
-  if(ex.sets)return ex.sets.some(s=>s.weight||s.reps);
-  return ex.loggedWeight||ex.loggedReps;
-}
-function mergeSessionWithPlan(day){
-  const key=todayKey(),old=state.sessions[key];if(!old||old.cycleDay!==day)return;
-  const exs=getWorkouts(day),last=lastSession(day);
-  old.exercises=exs.map(ex=>{
-    const oe=old.exercises.find(e=>e.name===ex.n);
-    const le=last?last.exercises.find(e=>e.name===ex.n&&e.completed):null;
-    const numSets=ex.u===''?Math.max(ex.s,0):(ex.s||1);
-    const cw=le&&le.sets&&le.sets[0]&&le.sets[0].weight?parseFloat(le.sets[0].weight):ex.w;
-    if(oe){
-      // Preserve existing set data, adjust array length to match new set count
-      const sets=[];
-      for(let si=0;si<numSets;si++){sets.push(oe.sets&&oe.sets[si]?oe.sets[si]:{weight:'',reps:''})}
-      return{name:ex.n,targetSets:ex.s,targetReps:ex.r,rest:ex.rest,startWeight:cw,originalWeight:ex.w,unit:ex.u,progression:ex.p,sets:sets,completed:oe.completed};
-    }
-    const sets=[];for(let si=0;si<numSets;si++){sets.push({weight:'',reps:''})}
-    return{name:ex.n,targetSets:ex.s,targetReps:ex.r,rest:ex.rest,startWeight:cw,originalWeight:ex.w,unit:ex.u,progression:ex.p,sets:sets,completed:false};
+  cd=safeDay(cd);const dayName=dayInfo(cd).name;let best=null,bt=-1;
+  Object.keys(state.sessions).forEach(k=>{
+    const s=state.sessions[k];if(!s||!s.logged)return;
+    if(s.cycleDay!==cd&&s.dayName!==dayName)return;
+    const t=sessionTime(k,s);if(t>bt){bt=t;best=s}
   });
-  old.dayName=CYCLE[safeDay(day)-1].name;
+  return best;
+}
+function advanceDay(){const next=state.currentCycleDay>=7?1:state.currentCycleDay+1;if(next===1)state.cycleCount=(state.cycleCount||1)+1;state.currentCycleDay=next}
+function validateSession(sess){
+  const w=[];
+  sess.exercises.forEach(ex=>{
+    if(!ex.completed||!Array.isArray(ex.sets)||!ex.sets.length)return;
+    let hasAnyData=false;
+    ex.sets.forEach((s,si)=>{
+      if(s.weight||s.reps)hasAnyData=true;
+      if(s.weight&&(isNaN(parseFloat(s.weight))||parseFloat(s.weight)<0||parseFloat(s.weight)>999))w.push(`${ex.name} S${si+1}: invalid weight`);
+      if(s.reps&&(isNaN(parseInt(s.reps))||parseInt(s.reps)<0||parseInt(s.reps)>999))w.push(`${ex.name} S${si+1}: invalid reps`);
+    });
+    if(ex.unit!==''&&!hasAnyData)w.push(`${ex.name}: add data for at least one set`);
+  });
+  return w;
 }
 
-// ═══ RENDER WORKOUT ═══
+// ═══════════════════════════════════════════════
+// STORAGE + SYNC
+// ═══════════════════════════════════════════════
+let fbReady=false;        // blocks Firebase writes until the first snapshot arrives (never overwrite cloud data with an empty local state)
+let _writeCount=0;        // our own writes echo back through the listener; skip exactly that many snapshots
+let _listenCount=0;
+let _fbListener=null,_fbListenerRef=null,_saveTimer=null,_localTimer=null;
+
+function setStorageKey(k){
+  if(_localTimer)persistLocal(); // anything pending belongs to the previous account/guest key
+  lsKey=k;
+  try{ // one-time adoption of the pre-per-account storage key
+    if(localStorage.getItem(k)===null){const legacy=localStorage.getItem(LS_LEGACY);if(legacy!==null){localStorage.setItem(k,legacy);localStorage.removeItem(LS_LEGACY)}}
+  }catch(e){}
+}
+function loadLocal(){
+  try{const r=localStorage.getItem(lsKey);if(r)return normalize(JSON.parse(r))}catch(e){}
+  return normalize(defState());
+}
+function persistLocal(){clearTimeout(_localTimer);_localTimer=null;try{localStorage.setItem(lsKey,JSON.stringify(state))}catch(e){}}
+function persistLocalSoon(){if(!_localTimer)_localTimer=setTimeout(persistLocal,150)} // coalesces a burst of keystrokes into one serialization
+function pushRemote(){
+  if(guestMode||!fbReady||!userRef)return;
+  clearTimeout(_saveTimer);_saveTimer=null;
+  _writeCount++;setSync('s');
+  // round-trip through JSON: Firebase rejects undefined values synchronously
+  userRef.set(JSON.parse(JSON.stringify(state))).then(()=>setSync('ok')).catch(()=>setSync('off'));
+}
+// Local storage is written within 150ms of any change and flushed synchronously on pagehide/visibilitychange
+// (what a refresh, tab close or app switch fires), so a refresh never loses typed numbers. Cloud writes are debounced 1s.
+function saveState(immediate){
+  if(immediate)persistLocal();else persistLocalSoon();
+  if(guestMode||!fbReady||!userRef)return;
+  if(immediate){pushRemote();return}
+  clearTimeout(_saveTimer);_saveTimer=setTimeout(pushRemote,1000);
+}
+function flushPendingSave(){persistLocal();if(_saveTimer)pushRemote()}
+window.addEventListener('pagehide',flushPendingSave);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')flushPendingSave()});
+
+function mergeSessions(local,remote){
+  const merged=Object.assign({},remote);
+  Object.keys(local).forEach(k=>{if(!merged[k]||sessionScore(local[k])>sessionScore(merged[k]))merged[k]=local[k]});
+  return merged;
+}
+function runPplMigration(obj){
+  // One-time migration from the pre-PPL plan: drop stale custom workouts and an empty active session.
+  if(obj._pplMigrated)return;
+  obj.customWorkouts={};
+  const k=obj.todaySession;if(k&&obj.sessions[k]&&sessionScore(obj.sessions[k])===0)delete obj.sessions[k];
+  obj._pplMigrated=true;
+}
+function loadFromFirebase(){
+  fbReady=false;
+  state=loadLocal();runPplMigration(state);initSession();persistLocal();render();hideLoading();
+  setSync('s');
+  if(_fbListener&&_fbListenerRef)_fbListenerRef.off('value',_fbListener);
+  const ref=userRef;_fbListenerRef=ref;_writeCount=0;_listenCount=0;
+  _fbListener=ref.on('value',snap=>{
+    if(ref!==userRef)return; // account changed while this snapshot was in flight
+    if(_listenCount<_writeCount){_listenCount++;setSync('ok');return} // echo of our own write
+    const isInitial=!fbReady,d=snap.val();
+    if(d&&typeof d==='object'){
+      const fb=normalize(d);runPplMigration(fb);
+      if(isInitial){
+        // merge offline work into the cloud copy; nothing is dropped
+        fb.sessions=mergeSessions(state.sessions,fb.sessions);
+        fb.customWorkouts=Object.assign({},state.customWorkouts,fb.customWorkouts);
+      } else {
+        // another device wrote: keep our in-progress session if it holds more than the cloud copy
+        const ak=state.todaySession,ls=ak?state.sessions[ak]:null;
+        if(ls&&!ls.logged&&sessionScore(ls)>sessionScore(fb.sessions[ak]))fb.sessions[ak]=ls;
+      }
+      state=fb;
+    }
+    initSession();persistLocal();
+    if(isInitial){fbReady=true;pushRemote()}
+    render();setSync('ok');
+  },()=>{fbReady=true;setSync('off')}); // listener error/offline: keep working locally
+}
+function hideLoading(){$('appLoading').style.display='none';$('cycleBar').style.display='';document.querySelectorAll('.tabs').forEach(t=>t.style.display='')}
+function setSync(s){const d=$('syncDot');d.className='sync'+(s==='s'?' s':s==='off'?' off':'');const t=s==='ok'?'Synced':s==='s'?'Syncing...':'Offline';d.title=t;d.setAttribute('aria-label',t)}
+
+// ═══════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════
+function showLoginError(m){$('loginError').textContent=m}
+function showLoginLoading(s){$('loginLoading').style.display=s?'block':'none';$('googleLoginBtn').style.opacity=s?'.5':'1';$('emailLoginBtn').style.opacity=s?'.5':'1'}
+function showApp(){$('loginScreen').classList.add('out');$('mainApp').classList.add('on')}
+function showLogin(){guestMode=false;$('loginScreen').classList.remove('out');$('mainApp').classList.remove('on')}
+function setAvatar(user){
+  const old=$('userAvatar');let el;
+  const name=user?(user.displayName||user.email||'?'):'';
+  if(user&&user.photoURL){el=document.createElement('img');el.src=user.photoURL;el.className='avatar';el.alt='';el.referrerPolicy='no-referrer'}
+  else{el=document.createElement('div');el.className='av-init';el.textContent=user?name.charAt(0).toUpperCase():'G'}
+  el.id='userAvatar';el.title=user?name:'Guest (local only)';
+  el.addEventListener('click',user
+    ?()=>showModal('Sign Out','Signed in as '+name+'. Sign out?',()=>auth.signOut())
+    :()=>showModal('Guest Mode','Data is saved locally. Sign in to sync across devices.',showLogin,{confirmText:'Sign in',positive:true}));
+  old.replaceWith(el);
+}
+function enterGuest(){
+  guestMode=true;currentUser=null;userRef=null;fbReady=false;
+  setStorageKey('gb_data_guest');
+  showApp();setAvatar(null);$('syncDot').style.display='none';
+  state=loadLocal();runPplMigration(state);initSession();saveState();render();hideLoading();
+}
+let _authBusy=false,isSignUp=false;
+$('googleLoginBtn').addEventListener('click',async()=>{
+  if(_authBusy)return;
+  if(!auth){showLoginError('Cloud sign-in is unavailable. Check your connection or continue without login.');return}
+  const p=new firebase.auth.GoogleAuthProvider();
+  _authBusy=true;showLoginLoading(true);
+  try{await auth.signInWithPopup(p)}
+  catch(e){
+    if(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)){ // popups are unreliable on mobile — fall back to redirect
+      try{await auth.signInWithRedirect(p)}catch(e2){showLoginError('Sign-in failed. Try email instead.');showLoginLoading(false)}
+    } else {
+      showLoginError(e&&e.code==='auth/popup-blocked'?'Allow popups and try again.':'Sign-in failed. Try email instead.');showLoginLoading(false);
+    }
+  }
+  _authBusy=false;
+});
+$('toggleSignUp').addEventListener('click',()=>{
+  isSignUp=!isSignUp;
+  $('toggleSignUp').textContent=isSignUp?'Already have an account? Sign in':"Don't have an account? Sign up";
+  $('emailLoginBtn').textContent=isSignUp?'SIGN UP':'SIGN IN';
+  $('loginError').textContent='';
+});
+$('emailLoginBtn').addEventListener('click',async()=>{
+  if(_authBusy)return;
+  if(!auth){showLoginError('Cloud sign-in is unavailable. Check your connection or continue without login.');return}
+  const email=$('emailInput').value.trim(),pass=$('passwordInput').value;
+  if(!email||!pass){showLoginError('Enter email and password');return}
+  if(pass.length<6){showLoginError('Password must be 6+ characters');return}
+  _authBusy=true;showLoginLoading(true);
+  try{
+    if(isSignUp)await auth.createUserWithEmailAndPassword(email,pass);
+    else await auth.signInWithEmailAndPassword(email,pass);
+  }catch(e){
+    const m={'auth/user-not-found':'Invalid email or password.','auth/wrong-password':'Invalid email or password.','auth/invalid-credential':'Invalid email or password.',
+      'auth/email-already-in-use':'Could not create account. Try signing in.','auth/invalid-email':'Invalid email address.',
+      'auth/too-many-requests':'Too many attempts. Try again later.','auth/network-request-failed':'Network error. Check your connection.'};
+    showLoginError(m[e&&e.code]||'Something went wrong. Try again.');showLoginLoading(false);
+  }
+  _authBusy=false;
+});
+$('passwordInput').addEventListener('keydown',e=>{if(e.key==='Enter')$('emailLoginBtn').click()});
+$('guestBtn').addEventListener('click',enterGuest);
+
+function boot(){
+  if(typeof firebase==='undefined'){showLoginError('Cloud sign-in is unavailable right now. You can continue without login.');return}
+  firebase.initializeApp({
+    apiKey:"AIzaSyCCHE_1TX8VeAmNwoHRs2MunA5pFa5LIaY",
+    authDomain:"gymbuddy-9d596.firebaseapp.com",
+    databaseURL:"https://gymbuddy-9d596-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId:"gymbuddy-9d596",
+    storageBucket:"gymbuddy-9d596.firebasestorage.app",
+    messagingSenderId:"949020636436",
+    appId:"1:949020636436:web:58b78b6c108ddaaaf97e01"
+  });
+  auth=firebase.auth();db=firebase.database();
+  // completes mobile Google sign-in after a redirect
+  auth.getRedirectResult().catch(e=>{if(e&&e.code&&e.code!=='auth/credential-already-in-use')showLoginError('Sign-in failed. Please try again.')});
+  auth.onAuthStateChanged(user=>{
+    if(user){
+      guestMode=false;currentUser=user;userRef=db.ref('users/'+user.uid);
+      setStorageKey('gb_data_'+user.uid);
+      showApp();showLoginLoading(false);$('syncDot').style.display='';setAvatar(user);
+      loadFromFirebase();
+    } else {
+      if(_fbListenerRef&&_fbListener)_fbListenerRef.off('value',_fbListener);
+      _fbListener=null;_fbListenerRef=null;fbReady=false;currentUser=null;userRef=null;
+      if(!guestMode)showLogin(); // initial "no user" event must not kick a guest back to the login screen
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════
+// RENDER
+// ═══════════════════════════════════════════════
+let activeTab='workout';
+function render(){renderCycle();renderTab()}
+function renderTab(){
+  if(activeTab==='workout')renderWorkout();
+  else if(activeTab==='history')renderHistory();
+  else if(activeTab==='progress')renderProgress();
+  else renderRules();
+}
+
+// ═══ CYCLE BAR ═══
+function renderCycle(){
+  $('cycleBar').innerHTML=CYCLE.map(c=>`<div class="cd ${c.day===state.currentCycleDay?'on':''}" data-day="${c.day}" role="button" tabindex="0"><span class="n">${c.day}</span><span class="l">${c.focus.split(' ')[0].slice(0,4).toUpperCase()}</span></div>`).join('');
+}
+function switchDay(newDay){
+  newDay=safeDay(newDay);if(newDay===state.currentCycleDay)return;
+  const sess=state.sessions[state.todaySession];
+  const doSwitch=()=>{state.currentCycleDay=newDay;initSession();saveState(true);render()};
+  if(sessionHasData(sess))showModal('Switch Day',`Day ${sess.cycleDay} has unlogged numbers. They're kept until you come back. Switch to Day ${newDay}?`,doSwitch,{confirmText:'Switch',positive:true});
+  else doSwitch();
+}
+$('cycleBar').addEventListener('click',e=>{const el=e.target.closest('.cd');if(el)switchDay(el.dataset.day)});
+$('cycleBar').addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const el=e.target.closest('.cd');if(el){e.preventDefault();switchDay(el.dataset.day)}});
+
+// ═══ WORKOUT ═══
+const EMPTY_WORKOUT=`<div class="empty"><div class="ico"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg></div><p>Rest day &mdash; or add exercises with the edit button above.</p><button class="skip-rest-btn" id="skipRestBtn">Skip to next day</button></div>`;
 function renderWorkout(){
-  const ci=CYCLE[safeDay(state.currentCycleDay)-1],bn=document.getElementById('dayBanner');
-  bn.className=`banner ${ci.type}`;
+  const ci=dayInfo(state.currentCycleDay),bn=$('dayBanner');
+  bn.className='banner '+ci.type;
   bn.innerHTML=`<div><div class="bt">Day ${ci.day} &mdash; ${ci.name}</div><div class="bs">${ci.focus} &middot; Cycle ${state.cycleCount}</div></div>
     <div style="display:flex;align-items:center;gap:8px"><button class="edit-btn" id="editWorkoutBtn" title="Edit exercises" aria-label="Edit exercises"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button><span class="badge">${ci.type}</span></div>`;
-  const eb=document.getElementById('editWorkoutBtn');if(eb)eb.addEventListener('click',()=>openEditPanel(state.currentCycleDay));
-
-  const list=document.getElementById('exerciseList'),sess=state.sessions[state.todaySession],ls=lastSession(state.currentCycleDay);
-  if(!sess||!sess.exercises.length){list.innerHTML=`<div class="empty"><div class="ico"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg></div><p>Rest day &mdash; or add exercises with the edit button above.</p><button class="skip-rest-btn" id="skipRestBtn">Skip to next day</button></div>`;document.getElementById('bottomBar').style.display='none';
-    document.getElementById('skipRestBtn').addEventListener('click',()=>{cleanGhostSession();const next=state.currentCycleDay>=7?1:state.currentCycleDay+1;if(next===1)state.cycleCount=(state.cycleCount||1)+1;state.currentCycleDay=next;initSession();saveState(true);render()});
-    return}
-  document.getElementById('bottomBar').style.display='block';
-
-  let lastDate='';if(ls&&ls.date){const ld=new Date(ls.date);lastDate=ld.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
-
+  const list=$('exerciseList'),bar=$('bottomBar'),sess=state.sessions[state.todaySession];
+  if(!sess||!sess.exercises.length){list.innerHTML=EMPTY_WORKOUT;bar.style.display='none';return}
+  bar.style.display=activeTab==='workout'?'block':'none';
+  const ls=lastSession(state.currentCycleDay);
+  let lastDate='';if(ls){const ld=sessionDate(null,ls);if(!isNaN(ld))lastDate=ld.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
   list.innerHTML=sess.exercises.map((ex,i)=>{
-    const le=ls?ls.exercises.find(e=>e.name===ex.name):null;const has=le&&le.completed;
-    // Ensure sets array exists (backward compat with old data)
-    if(!ex.sets){const ns=ex.targetSets||1;ex.sets=[];for(let si=0;si<ns;si++)ex.sets.push({weight:ex.loggedWeight||'',reps:ex.loggedReps||''})}
-    // Last session reference
-    let li='';
-    if(has){li=`<div class="ex-last">Last session: ${lastDate}</div>`}
-    // Per-set inputs
-    const numSets=ex.sets.length;
+    const le=ls?ls.exercises.find(e=>e&&e.name===ex.name&&e.completed):null;
     let setsHtml='';
-    if(ex.unit!==''){
+    if(ex.unit!==''&&ex.sets.length){
       setsHtml=ex.sets.map((s,si)=>{
-        const lastSet=has&&le.sets&&le.sets[si]?le.sets[si]:null;
+        const lastSet=le&&Array.isArray(le.sets)?le.sets[si]:null;
         const wPh=lastSet&&lastSet.weight?lastSet.weight:(ex.startWeight||'BW');
         const rPh=lastSet&&lastSet.reps?lastSet.reps:ex.targetReps;
-        return`<div class="ex-set-row"><span class="set-num">S${si+1}</span><div class="inp-g"><input type="number" inputmode="decimal" placeholder="${wPh}" value="${s.weight}" data-i="${i}" data-si="${si}" data-f="w"></div><div class="inp-g"><input type="number" inputmode="numeric" placeholder="${rPh}" value="${s.reps}" data-i="${i}" data-si="${si}" data-f="r"></div></div>`;
+        return`<div class="ex-set-row"><span class="set-num">S${si+1}</span><div class="inp-g"><input type="number" step="any" min="0" inputmode="decimal" placeholder="${esc(wPh)}" value="${esc(s.weight)}" data-i="${i}" data-si="${si}" data-f="w" aria-label="${esc(ex.name)} set ${si+1} weight"></div><div class="inp-g"><input type="number" step="any" min="0" inputmode="numeric" placeholder="${esc(rPh)}" value="${esc(s.reps)}" data-i="${i}" data-si="${si}" data-f="r" aria-label="${esc(ex.name)} set ${si+1} reps"></div></div>`;
       }).join('');
-      setsHtml=`<div class="ex-sets"><div class="ex-sets-hdr"><span></span><span class="sets-lbl">Weight (${ex.unit==='BW'?'BW':ex.unit})</span><span class="sets-lbl">Reps</span></div>${setsHtml}</div>`;
+      setsHtml=`<div class="ex-sets"><div class="ex-sets-hdr"><span></span><span class="sets-lbl">Weight (${esc(ex.unit)})</span><span class="sets-lbl">Reps</span></div>${setsHtml}</div>`;
     }
     return`<div class="exc ${ex.completed?'done':''}" data-i="${i}">
-      <div class="ex-top"><button class="chk" data-i="${i}">${ex.completed?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>':''}</button><span class="ex-nm">${esc(ex.name)}</span></div>
-      <div class="ex-meta">${ex.targetSets?`<span><span class="v">${esc(''+ex.targetSets)}</span> sets</span>`:''}<span><span class="v">${esc(ex.targetReps)}</span> reps</span>${ex.rest!=='-'?`<span><span class="v">${esc(fmtRest(ex.rest))}</span> rest</span>`:''}</div>
-      ${li}${setsHtml}
+      <div class="ex-top"><button class="chk" data-i="${i}" aria-label="Mark ${esc(ex.name)} complete" aria-pressed="${ex.completed?'true':'false'}">${ex.completed?CHECK_SVG:''}</button><span class="ex-nm">${esc(ex.name)}</span></div>
+      <div class="ex-meta">${ex.targetSets?`<span><span class="v">${esc(ex.targetSets)}</span> sets</span>`:''}<span><span class="v">${esc(ex.targetReps)}</span> reps</span>${ex.rest!=='-'?`<span><span class="v">${esc(fmtRest(ex.rest))}</span> rest</span>`:''}</div>
+      ${le?`<div class="ex-last">Last session: ${esc(lastDate)}</div>`:''}${setsHtml}
       ${ex.progression?`<div class="ex-prog">${esc(ex.progression)}</div>`:''}
     </div>`;
   }).join('');
-
-  list.querySelectorAll('.chk').forEach(b=>{b.addEventListener('click',()=>{
-    const i=parseInt(b.dataset.i),ex=sess.exercises[i],card=b.closest('.exc');
-    ex.completed=!ex.completed;
-    card.classList.toggle('done',ex.completed);
-    if(ex.completed){
-      // Fill empty sets with placeholder values
-      const inputs=card.querySelectorAll('.ex-sets input');
-      inputs.forEach(inp=>{
-        if(!inp.value&&inp.placeholder&&inp.placeholder!==''){
-          // Don't auto-fill non-numeric placeholders like "AMRAP" or "15-20 min"
-          const ph=inp.placeholder;
-          if(isNaN(parseFloat(ph)))return;
-          const si=parseInt(inp.dataset.si),f=inp.dataset.f;
-          inp.value=ph;
-          if(f==='w')ex.sets[si].weight=ph;
-          if(f==='r')ex.sets[si].reps=ph;
-        }
-      });
-      const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
-      svg.setAttribute('width','14');svg.setAttribute('height','14');svg.setAttribute('viewBox','0 0 24 24');
-      svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','3');
-      svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');
-      const pl=document.createElementNS('http://www.w3.org/2000/svg','polyline');
-      pl.setAttribute('points','20 6 9 17 4 12');svg.appendChild(pl);
-      b.textContent='';b.appendChild(svg);
-    } else {b.textContent=''}
-    saveState(true);
-  })});
-  let dt;list.querySelectorAll('.ex-sets input').forEach(inp=>{inp.addEventListener('input',()=>{
-    const i=parseInt(inp.dataset.i),si=parseInt(inp.dataset.si),f=inp.dataset.f;
-    if(f==='w')sess.exercises[i].sets[si].weight=inp.value;
-    if(f==='r')sess.exercises[i].sets[si].reps=inp.value;
-    // Auto-tick/untick without full re-render
-    const ex=sess.exercises[i],card=inp.closest('.exc'),chk=card.querySelector('.chk');
-    const allRepsFilled=ex.sets.every(s=>s.reps&&s.reps.trim()!=='');
-    if(allRepsFilled&&!ex.completed){
-      ex.completed=true;card.classList.add('done');
-      const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
-      svg.setAttribute('width','14');svg.setAttribute('height','14');svg.setAttribute('viewBox','0 0 24 24');
-      svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','3');
-      svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');
-      const pl=document.createElementNS('http://www.w3.org/2000/svg','polyline');
-      pl.setAttribute('points','20 6 9 17 4 12');svg.appendChild(pl);
-      chk.textContent='';chk.appendChild(svg);
-    } else if(ex.completed&&ex.sets.every(s=>!s.reps||s.reps.trim()==='')){
-      ex.completed=false;card.classList.remove('done');chk.textContent='';
-    }
-    clearTimeout(dt);dt=setTimeout(()=>saveState(),800);
-  })});
 }
+function setCompleted(ex,card,chk,on){
+  ex.completed=on;
+  if(card)card.classList.toggle('done',on);
+  if(chk){chk.innerHTML=on?CHECK_SVG:'';chk.setAttribute('aria-pressed',on?'true':'false')}
+}
+function toggleCheck(b){
+  const sess=state.sessions[state.todaySession];if(!sess)return;
+  const ex=sess.exercises[parseInt(b.dataset.i)];if(!ex)return;
+  const card=b.closest('.exc');
+  setCompleted(ex,card,b,!ex.completed);
+  if(ex.completed&&card){
+    // ticking adopts last session's numbers for empty sets — but only real numbers, never "6-8" / "AMRAP" / "BW"
+    card.querySelectorAll('.ex-sets input').forEach(inp=>{
+      if(inp.value||!NUM_RE.test(inp.placeholder))return;
+      const set=ex.sets[parseInt(inp.dataset.si)];if(!set)return;
+      inp.value=inp.placeholder;
+      if(inp.dataset.f==='w')set.weight=inp.placeholder;else set.reps=inp.placeholder;
+    });
+  }
+  saveState(true);
+}
+function onSetInput(inp){
+  const sess=state.sessions[state.todaySession];if(!sess)return;
+  const ex=sess.exercises[parseInt(inp.dataset.i)],si=parseInt(inp.dataset.si);
+  if(!ex||!ex.sets[si])return;
+  if(inp.dataset.f==='w')ex.sets[si].weight=inp.value;else ex.sets[si].reps=inp.value;
+  // auto-tick when every set has reps, auto-untick when they're all cleared (no re-render, keeps focus)
+  const card=inp.closest('.exc'),chk=card?card.querySelector('.chk'):null;
+  const filled=s=>String(s.reps||'').trim()!=='';
+  if(!ex.completed&&ex.sets.every(filled))setCompleted(ex,card,chk,true);
+  else if(ex.completed&&!ex.sets.some(filled))setCompleted(ex,card,chk,false);
+  saveState();
+}
+$('exerciseList').addEventListener('click',e=>{
+  if(e.target.closest('#skipRestBtn')){advanceDay();initSession();saveState(true);render();return}
+  const b=e.target.closest('.chk');if(b)toggleCheck(b);
+});
+$('exerciseList').addEventListener('input',e=>{const inp=e.target;if(inp&&inp.matches&&inp.matches('.ex-sets input'))onSetInput(inp)});
+$('dayBanner').addEventListener('click',e=>{if(e.target.closest('#editWorkoutBtn'))openEditPanel(state.currentCycleDay)});
+
+// ═══ LOG SESSION ═══
+let _logLocked=false;
+$('saveBtn').addEventListener('click',()=>{
+  if(_logLocked)return;
+  const sess=state.sessions[state.todaySession];if(!sess)return;
+  const cnt=sess.exercises.filter(e=>e.completed).length;
+  if(!cnt){showToast('Check off at least one exercise!');return}
+  const warns=validateSession(sess);if(warns.length){showToast(warns[0]);return}
+  const total=sess.exercises.length;
+  showModal('Log Session',`Log ${cnt}/${total} exercises and advance to next day?`,()=>{
+    _logLocked=true;
+    sess.logged=true;sess.date=new Date().toISOString(); // the ONLY place a session becomes logged
+    advanceDay();initSession();saveState(true);render();
+    const btn=$('saveBtn');btn.textContent='SESSION LOGGED ✓';btn.classList.add('saved');
+    showToast(`Logged! ${cnt}/${total} exercises`);
+    setTimeout(()=>{_logLocked=false;btn.textContent='LOG SESSION';btn.classList.remove('saved')},2000);
+  },{confirmText:'Log it',positive:true});
+});
+
+// ═══ RESET ═══
+$('resetBtn').addEventListener('click',()=>{showModal('Reset Session','Reset all checkmarks and values for this day?',()=>{delete state.sessions[state.todaySession];state.todaySession=null;initSession();saveState(true);render();showToast('Session reset')})});
 
 // ═══ HISTORY ═══
+function loggedKeys(){return Object.keys(state.sessions).filter(k=>state.sessions[k].logged).sort((a,b)=>sessionTime(b,state.sessions[b])-sessionTime(a,state.sessions[a]))}
+const IO_BAR=`<div class="hist-io"><button class="exp-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export XLSX</button><button class="imp-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import XLSX</button></div><input type="file" id="xlsxImport" accept=".xlsx,.xls" style="display:none">`;
+function fmtSets(e){
+  if(Array.isArray(e.sets)&&e.sets.length)return e.sets.map(s=>`${esc(s.weight||'-')}x${esc(s.reps||'-')}`).join(' / ');
+  return`${esc(e.loggedWeight||'-')}x${esc(e.loggedReps||'-')}`;
+}
 function renderHistory(){
-  const p=document.getElementById('historyTab'),keys=Object.keys(state.sessions).sort().reverse();
-  const logged=keys.filter(k=>{const s=state.sessions[k];return s.exercises&&s.exercises.some(e=>e.completed)});
-  const ioBar=`<div class="hist-io"><button class="exp-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export XLSX</button><button class="imp-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Import XLSX</button></div><input type="file" id="xlsxImport" accept=".xlsx,.xls" style="display:none">`;
-  if(!logged.length){
-    // Note: ioBar contains only static SVG/HTML with no user data — safe to use with innerHTML
-    p.innerHTML=ioBar+`<div class="empty"><div class="ico"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div><p>No logged sessions yet.<br>Complete a workout and hit LOG SESSION!</p></div>`;
-    p.querySelector('.exp-btn').addEventListener('click',exportHistory);
-    p.querySelector('.imp-btn').addEventListener('click',()=>document.getElementById('xlsxImport').click());
-    document.getElementById('xlsxImport').addEventListener('change',importHistory);
-    return;
+  const p=$('historyTab'),keys=loggedKeys();
+  const bindIO=()=>{
+    p.querySelector('.exp-btn').addEventListener('click',()=>withXLSX(exportHistory));
+    p.querySelector('.imp-btn').addEventListener('click',()=>$('xlsxImport').click());
+    $('xlsxImport').addEventListener('change',ev=>{const f=ev.target.files&&ev.target.files[0];ev.target.value='';if(f)withXLSX(()=>importHistory(f))});
+  };
+  if(!keys.length){
+    p.innerHTML=IO_BAR+`<div class="empty"><div class="ico"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div><p>No logged sessions yet.<br>Complete a workout and hit LOG SESSION!</p></div>`;
+    bindIO();return;
   }
-  const tc={upper:'var(--red)',lower:'var(--blue)',cardio:'var(--orange)',rest:'var(--text3)'},bg={upper:'var(--red-dim)',lower:'var(--blue-dim)',cardio:'var(--orange-dim)',rest:'var(--surface)'};
-  // Note: ioBar is static HTML, session data is escaped via esc() — safe innerHTML usage
-  p.innerHTML=ioBar+logged.map(key=>{
-    const s=state.sessions[key],ds=key.split('_')[0],d=new Date(ds+'T00:00:00');
-    const fmt=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}),ci=CYCLE[(s.cycleDay||1)-1]||CYCLE[0];
+  const tc={upper:'var(--red)',lower:'var(--blue)',cardio:'var(--orange)'},bg={upper:'var(--red-dim)',lower:'var(--blue-dim)',cardio:'var(--orange-dim)'};
+  p.innerHTML=IO_BAR+keys.map(key=>{
+    const s=state.sessions[key],ci=dayInfo(s.cycleDay);
+    const fmt=sessionDate(key,s).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
     return`<div class="h-entry" data-k="${key}"><div class="h-date"><span>${fmt} &mdash; Day ${s.cycleDay}</span><div class="h-actions"><span class="h-tag" style="background:${bg[ci.type]||'var(--surface)'};color:${tc[ci.type]||'var(--text3)'}">${esc(s.dayName||'')}</span><button class="h-edit-btn" data-k="${key}">Edit</button><button class="del-btn" data-k="${key}" aria-label="Delete"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>
-      <div class="h-exs" id="hexs-${key.replace(/[^a-zA-Z0-9]/g,'_')}">${s.exercises.filter(e=>e.completed).map(e=>{
-        if(e.sets&&e.sets.length){
-          const setsStr=e.sets.map((s,si)=>`${s.weight||'-'}x${s.reps||'-'}`).join(' / ');
-          return`<div class="h-ex"><span class="nm">${esc(e.name)}</span><span class="st">${setsStr} ${e.unit&&e.unit!=='BW'?e.unit:(e.unit==='BW'?'BW':'')}</span></div>`;
-        }
-        return`<div class="h-ex"><span class="nm">${esc(e.name)}</span><span class="st">${e.loggedWeight||'-'}x${e.loggedReps||'-'} ${e.unit||''}</span></div>`;
-      }).join('')}</div></div>`;
+      <div class="h-exs" id="hexs-${key.replace(/[^a-zA-Z0-9]/g,'_')}">${s.exercises.filter(e=>e.completed).map(e=>`<div class="h-ex"><span class="nm">${esc(e.name)}</span><span class="st">${fmtSets(e)} ${esc(e.unit||'')}</span></div>`).join('')}</div></div>`;
   }).join('');
-  p.querySelector('.exp-btn').addEventListener('click',exportHistory);
-  p.querySelector('.imp-btn').addEventListener('click',()=>document.getElementById('xlsxImport').click());
-  document.getElementById('xlsxImport').addEventListener('change',importHistory);
-  p.querySelectorAll('.del-btn').forEach(b=>{b.addEventListener('click',()=>{showModal('Delete Session','Delete this session permanently?',()=>{delete state.sessions[b.dataset.k];saveState(true);renderHistory();renderWorkout()})})});
+  bindIO();
+  p.querySelectorAll('.del-btn').forEach(b=>{b.addEventListener('click',()=>{showModal('Delete Session','Delete this session permanently?',()=>{delete state.sessions[b.dataset.k];initSession();saveState(true);render()})})});
   p.querySelectorAll('.h-edit-btn').forEach(b=>{b.addEventListener('click',()=>{
-    // Cancel any other open edit — re-render first, then re-click this button
+    // only one entry can be in edit mode — re-render (dropping the other draft), then open this one
     let hasOtherEdit=false;
     p.querySelectorAll('.h-edit-btn').forEach(ob=>{if(ob!==b&&ob.textContent==='Save')hasOtherEdit=true});
-    if(hasOtherEdit){renderHistory();const newBtn=p.querySelector(`.h-edit-btn[data-k="${b.dataset.k}"]`);if(newBtn)newBtn.click();return}
+    if(hasOtherEdit){renderHistory();const nb=p.querySelector(`.h-edit-btn[data-k="${b.dataset.k}"]`);if(nb)nb.click();return}
     const key=b.dataset.k,s=state.sessions[key];if(!s)return;
-    const sk=key.replace(/[^a-zA-Z0-9]/g,'_'),c=document.getElementById('hexs-'+sk),comp=s.exercises.filter(e=>e.completed);
+    const c=$('hexs-'+key.replace(/[^a-zA-Z0-9]/g,'_')),comp=s.exercises.filter(e=>e.completed);
     if(b.textContent==='Save'){
-      let v=true;c.querySelectorAll('.h-edit-set').forEach(row=>{
-        row.querySelectorAll('input').forEach(inp=>{
-          inp.classList.remove('inp-err');const val=inp.value.trim();
-          if(val&&(isNaN(parseFloat(val))||parseFloat(val)<0||parseFloat(val)>999)){inp.classList.add('inp-err');v=false}
-        });
+      let v=true;
+      c.querySelectorAll('.h-edit-set input').forEach(inp=>{
+        inp.classList.remove('inp-err');const val=inp.value.trim();
+        if(val&&(isNaN(parseFloat(val))||parseFloat(val)<0||parseFloat(val)>999)){inp.classList.add('inp-err');v=false}
       });
       if(!v){showToast('Fix invalid values');return}
       c.querySelectorAll('.h-edit-set').forEach(row=>{
-        const oi=parseInt(row.dataset.oi),si=parseInt(row.dataset.si);
+        const ex=s.exercises[parseInt(row.dataset.oi)],si=parseInt(row.dataset.si);if(!ex)return;
         const w=row.querySelector('[data-hf="w"]').value.trim(),r=row.querySelector('[data-hf="r"]').value.trim();
-        if(s.exercises[oi].sets&&s.exercises[oi].sets[si]){
-          s.exercises[oi].sets[si].weight=w;s.exercises[oi].sets[si].reps=r;
-        } else {
-          // Migrate old format to sets array
-          s.exercises[oi].sets=[{weight:w,reps:r}];
-          s.exercises[oi].loggedWeight=w;s.exercises[oi].loggedReps=r;
-        }
+        if(Array.isArray(ex.sets)&&ex.sets[si]){ex.sets[si].weight=w;ex.sets[si].reps=r}
+        else{ex.sets=[{weight:w,reps:r}];ex.loggedWeight=w;ex.loggedReps=r} // very old single-value format
       });
-      saveState(true);b.textContent='Edit';renderHistory();renderWorkout();showToast('Session updated!');return;
+      initSession(); // placeholders for today may come from this session
+      saveState(true);renderHistory();showToast('Session updated!');return;
     }
     b.textContent='Save';
     c.innerHTML=comp.map(e=>{
       const oi=s.exercises.indexOf(e);
-      if(e.sets&&e.sets.length){
+      if(Array.isArray(e.sets)&&e.sets.length){
         return`<div class="h-edit-ex-name">${esc(e.name)}</div>`+e.sets.map((st,si)=>
-          `<div class="h-edit-set" data-oi="${oi}" data-si="${si}"><span class="set-num">S${si+1}</span><input data-hf="w" value="${st.weight||''}" placeholder="Wt" inputmode="decimal"><input data-hf="r" value="${st.reps||''}" placeholder="Reps" inputmode="numeric"></div>`
+          `<div class="h-edit-set" data-oi="${oi}" data-si="${si}"><span class="set-num">S${si+1}</span><input data-hf="w" value="${esc(st.weight||'')}" placeholder="Wt" inputmode="decimal"><input data-hf="r" value="${esc(st.reps||'')}" placeholder="Reps" inputmode="numeric"></div>`
         ).join('');
       }
-      return`<div class="h-edit-set" data-oi="${oi}" data-si="0"><span class="nm">${esc(e.name)}</span><input data-hf="w" value="${e.loggedWeight||''}" placeholder="Wt" inputmode="decimal"><input data-hf="r" value="${e.loggedReps||''}" placeholder="Reps" inputmode="numeric"></div>`;
+      return`<div class="h-edit-set" data-oi="${oi}" data-si="0"><span class="nm">${esc(e.name)}</span><input data-hf="w" value="${esc(e.loggedWeight||'')}" placeholder="Wt" inputmode="decimal"><input data-hf="r" value="${esc(e.loggedReps||'')}" placeholder="Reps" inputmode="numeric"></div>`;
     }).join('');
   })});
 }
 
-// ═══ HISTORY EXPORT/IMPORT ═══
-function checkXLSX(){if(typeof XLSX==='undefined'){showToast('XLSX library not loaded — check your connection');return false}return true}
+// ═══ HISTORY EXPORT/IMPORT (XLSX library is fetched on first use) ═══
+let _xlsxPromise=null;
+function withXLSX(fn){
+  if(typeof XLSX!=='undefined'){fn();return}
+  if(!_xlsxPromise){
+    showToast('Loading spreadsheet tools...');
+    _xlsxPromise=new Promise((res,rej)=>{
+      const s=document.createElement('script');s.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';s.crossOrigin='anonymous';
+      s.onload=res;s.onerror=()=>{_xlsxPromise=null;rej(new Error('xlsx load failed'))};document.head.appendChild(s);
+    });
+  }
+  _xlsxPromise.then(fn).catch(()=>showToast('Could not load spreadsheet tools — check your connection'));
+}
 function exportHistory(){
-  if(!checkXLSX())return;
-  const keys=Object.keys(state.sessions).sort();
   const rows=[];
-  keys.forEach(key=>{
-    const s=state.sessions[key];if(!s.exercises||!s.exercises.some(e=>e.completed))return;
-    const ds=key.split('_')[0],d=new Date(ds+'T00:00:00');
-    const date=d.toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit'});
+  loggedKeys().reverse().forEach(key=>{
+    const s=state.sessions[key];
+    const date=sessionDate(key,s).toLocaleDateString('en-US',{year:'numeric',month:'2-digit',day:'2-digit'});
     s.exercises.filter(e=>e.completed).forEach(e=>{
-      if(e.sets&&e.sets.length){
-        e.sets.forEach((st,si)=>{
-          rows.push({Date:date,Day:s.cycleDay,DayName:s.dayName||'',Cycle:s.cycleCount||1,Exercise:e.name,Set:si+1,Weight:st.weight||'',Reps:st.reps||'',Unit:e.unit||'kg'});
-        });
-      } else {
-        rows.push({Date:date,Day:s.cycleDay,DayName:s.dayName||'',Cycle:s.cycleCount||1,Exercise:e.name,Set:1,Weight:e.loggedWeight||'',Reps:e.loggedReps||'',Unit:e.unit||'kg'});
-      }
+      const base={Date:date,Day:s.cycleDay,DayName:s.dayName||'',Cycle:s.cycleCount||1,Exercise:e.name};
+      if(Array.isArray(e.sets)&&e.sets.length)e.sets.forEach((st,si)=>rows.push(Object.assign({},base,{Set:si+1,Weight:st.weight||'',Reps:st.reps||'',Unit:e.unit||'kg'})));
+      else rows.push(Object.assign({},base,{Set:1,Weight:e.loggedWeight||'',Reps:e.loggedReps||'',Unit:e.unit||'kg'}));
     });
   });
   if(!rows.length){showToast('No sessions to export');return}
@@ -1259,79 +1253,80 @@ function exportHistory(){
   XLSX.writeFile(wb,'GymBuddy_History.xlsx');
   showToast('Exported '+rows.length+' rows');
 }
-function importHistory(ev){
-  if(!checkXLSX())return;
-  const file=ev.target.files[0];if(!file)return;ev.target.value='';
+// Dates come back as Date objects, Excel serials or text depending on how the sheet was saved.
+function parseRowDate(v){
+  if(v instanceof Date)return isNaN(v)?null:v;
+  if(typeof v==='number'){const o=XLSX.SSF.parse_date_code(v);return o?new Date(o.y,o.m-1,o.d):null}
+  if(v==null||v==='')return null;
+  const d=new Date(String(v));return isNaN(d)?null:d;
+}
+function importHistory(file){
   const reader=new FileReader();
   reader.onload=function(e){
     try{
-      const wb=XLSX.read(e.target.result,{type:'array'});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const rows=XLSX.utils.sheet_to_json(ws);
+      const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
       if(!rows.length){showToast('Empty file');return}
-      // Validate required columns
-      const req=['Date','Exercise','Set','Weight','Reps'];
-      const cols=Object.keys(rows[0]);
-      const missing=req.filter(r=>!cols.includes(r));
+      const missing=['Date','Exercise','Set','Weight','Reps'].filter(r=>!(r in rows[0]));
       if(missing.length){showToast('Missing columns: '+missing.join(', '));return}
-      // Group rows into sessions
       const grouped={};
       rows.forEach(r=>{
-        const dp=new Date(r.Date);if(isNaN(dp))return;
-        const ds=dp.toISOString().slice(0,10);
-        const day=Math.min(7,Math.max(1,parseInt(r.Day)||1)),cycle=Math.max(1,parseInt(r.Cycle)||1);
-        const skey=ds+'_C'+cycle+'_D'+day;
-        if(!grouped[skey])grouped[skey]={date:dp.toISOString(),cycleDay:day,cycleCount:cycle,dayName:String(r.DayName||CYCLE[day-1].name).slice(0,40),exercises:{}};
+        const dp=parseRowDate(r.Date);if(!dp)return;
+        const day=safeDay(r.Day),cycle=Math.max(1,parseInt(r.Cycle)||1);
+        const skey=fmtDate(dp)+'_C'+cycle+'_D'+day; // local date, so nothing shifts a day across timezones
+        if(!grouped[skey])grouped[skey]={date:dp.toISOString(),cycleDay:day,cycleCount:cycle,dayName:String(r.DayName||dayInfo(day).name).slice(0,40),exercises:{}};
         const exName=String(r.Exercise).slice(0,80);
-        if(!grouped[skey].exercises[exName])grouped[skey].exercises[exName]={name:exName,unit:String(r.Unit||'kg'),sets:[]};
-        grouped[skey].exercises[exName].sets.push({weight:String(r.Weight||''),reps:String(r.Reps||'')});
+        if(!grouped[skey].exercises[exName])grouped[skey].exercises[exName]={name:exName,unit:String(r.Unit==null?'kg':r.Unit).slice(0,10),sets:[]};
+        grouped[skey].exercises[exName].sets.push({weight:String(r.Weight==null?'':r.Weight),reps:String(r.Reps==null?'':r.Reps)});
       });
       let imported=0;
       Object.keys(grouped).forEach(skey=>{
+        if(state.sessions[skey])return; // duplicates skipped
         const g=grouped[skey];
-        const exArr=Object.values(g.exercises).map(ex=>({
-          name:ex.name,targetSets:ex.sets.length,targetReps:'',rest:'',startWeight:0,originalWeight:0,unit:ex.unit,progression:'',
-          sets:ex.sets,completed:true
-        }));
-        if(!state.sessions[skey]){
-          state.sessions[skey]={date:g.date,cycleDay:g.cycleDay,cycleCount:g.cycleCount,dayName:g.dayName,exercises:exArr};
-          imported++;
-        }
+        state.sessions[skey]={date:g.date,cycleDay:g.cycleDay,cycleCount:g.cycleCount,dayName:g.dayName,logged:true,
+          exercises:Object.values(g.exercises).map(ex=>({name:ex.name,targetSets:ex.sets.length,targetReps:'',rest:'',startWeight:0,originalWeight:0,unit:ex.unit,progression:'',sets:ex.sets,completed:true}))};
+        imported++;
       });
-      if(imported>0){saveState(true);renderHistory();renderWorkout()}
-      showToast(imported>0?'Imported '+imported+' sessions':"No new sessions (duplicates skipped)");
+      if(imported>0){initSession();saveState(true);render()}
+      showToast(imported>0?'Imported '+imported+' sessions':'No new sessions (duplicates skipped)');
     }catch(err){showToast('Error reading file')}
   };
+  reader.onerror=()=>showToast('Error reading file');
   reader.readAsArrayBuffer(file);
 }
 
 // ═══ PROGRESS ═══
 function renderProgress(){
-  const p=document.getElementById('progressTab'),names=new Set();
+  const p=$('progressTab'),names=new Set(),keys=loggedKeys().reverse(); // oldest → newest
   for(let d=1;d<=7;d++){getWorkouts(d).forEach(e=>{if(e.w>0)names.add(e.n)})}
-  Object.values(state.sessions).forEach(s=>{if(!s.exercises)return;s.exercises.forEach(e=>{
+  keys.forEach(k=>{state.sessions[k].exercises.forEach(e=>{
     if(!e.completed)return;
-    if(e.sets&&e.sets.some(s=>s.weight&&parseFloat(s.weight)>0))names.add(e.name);
-    else if(e.loggedWeight&&parseFloat(e.loggedWeight)>0)names.add(e.name);
+    if(Array.isArray(e.sets)?e.sets.some(s=>s&&parseFloat(s.weight)>0):parseFloat(e.loggedWeight)>0)names.add(e.name);
   })});
   const pd=[];
   names.forEach(name=>{
-    const logs=[];Object.keys(state.sessions).sort().forEach(k=>{const s=state.sessions[k];if(!s.exercises)return;const ex=s.exercises.find(e=>e.name===name&&e.completed);if(!ex)return;
-      if(ex.sets&&ex.sets.length){const maxW=Math.max(...ex.sets.map(s=>parseFloat(s.weight)||0));if(maxW>0)logs.push({w:maxW,r:parseInt(ex.sets[0].reps)||0})}
-      else if(ex.loggedWeight){logs.push({w:parseFloat(ex.loggedWeight),r:parseInt(ex.loggedReps)||0})}});
-    let sw=0,unit='kg';for(let d=1;d<=7;d++){const f=getWorkouts(d).find(e=>e.n===name);if(f){sw=f.w;unit=f.u||'kg';break}}
-    if(logs.length>0){const lat=logs[logs.length-1];pd.push({name,sw,cw:lat.w,change:lat.w-sw,sess:logs.length,unit})}
+    const logs=[];
+    keys.forEach(k=>{
+      const ex=state.sessions[k].exercises.find(e=>e.name===name&&e.completed);if(!ex)return;
+      const maxW=Array.isArray(ex.sets)&&ex.sets.length?Math.max(...ex.sets.map(s=>parseFloat(s&&s.weight)||0)):(parseFloat(ex.loggedWeight)||0);
+      if(maxW>0)logs.push(maxW);
+    });
+    if(!logs.length)return;
+    let sw=0,unit='kg';
+    for(let d=1;d<=7;d++){const f=getWorkouts(d).find(e=>e.n===name);if(f){sw=f.w;unit=f.u||'kg';break}}
+    const cw=logs[logs.length-1];
+    pd.push({name,sw,cw,change:Math.round((cw-sw)*100)/100,sess:logs.length,unit});
   });
   if(!pd.length){p.innerHTML=`<div class="empty"><div class="ico"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div><p>Log sessions to see progression.</p></div>`;return}
-  const total=Object.keys(state.sessions).filter(k=>state.sessions[k].exercises&&state.sessions[k].exercises.some(e=>e.completed)).length,circ=2*Math.PI*22;
-  p.innerHTML=`<div class="p-card"><h3>Overview</h3><div class="p-stats"><div class="p-stat"><div class="num" style="color:var(--accent)">${total}</div><div class="lbl">Sessions</div></div><div class="p-stat"><div class="num" style="color:var(--accent2)">${pd.length}</div><div class="lbl">Exercises</div></div></div></div>
+  const circ=2*Math.PI*22;
+  p.innerHTML=`<div class="p-card"><h3>Overview</h3><div class="p-stats"><div class="p-stat"><div class="num" style="color:var(--accent)">${keys.length}</div><div class="lbl">Sessions</div></div><div class="p-stat"><div class="num" style="color:var(--accent2)">${pd.length}</div><div class="lbl">Exercises</div></div></div></div>
     ${pd.map(x=>{const pct=x.sw>0?Math.min(100,Math.max(5,(x.cw/(x.sw*1.5))*100)):50;const off=circ-(circ*pct/100);const cs=x.change>=0?`+${x.change}`:`${x.change}`;const cc=x.change>=0?'var(--green)':'var(--red)';
-      return`<div class="p-card"><div class="ring-wrap"><svg class="ring-svg" viewBox="0 0 56 56"><circle class="ring-bg" cx="28" cy="28" r="22"/><circle class="ring-fg" cx="28" cy="28" r="22" stroke-dasharray="${circ}" stroke-dashoffset="${off}"/></svg><div class="ring-info"><div class="nm">${esc(x.name)}</div><div class="det">Start: ${x.sw} ${x.unit} &rarr; Now: <strong>${x.cw} ${x.unit}</strong> <span style="color:${cc}">(${cs})</span></div><div class="det">${x.sess} session${x.sess>1?'s':''}</div></div></div></div>`}).join('')}`;
+      return`<div class="p-card"><div class="ring-wrap"><svg class="ring-svg" viewBox="0 0 56 56" aria-hidden="true"><circle class="ring-bg" cx="28" cy="28" r="22"/><circle class="ring-fg" cx="28" cy="28" r="22" stroke-dasharray="${circ}" stroke-dashoffset="${off}"/></svg><div class="ring-info"><div class="nm">${esc(x.name)}</div><div class="det">Start: ${esc(x.sw)} ${esc(x.unit)} &rarr; Now: <strong>${esc(x.cw)} ${esc(x.unit)}</strong> <span style="color:${cc}">(${cs})</span></div><div class="det">${x.sess} session${x.sess>1?'s':''}</div></div></div></div>`}).join('')}`;
 }
 
 // ═══ RULES ═══
 function renderRules(){
-  document.getElementById('rulesTab').innerHTML=`
+  $('rulesTab').innerHTML=`
     <div class="r-card"><h3>Double Progression</h3><ul><li>Week 1: Hit low end (e.g. 8 reps)</li><li>Week 2: Build to mid (e.g. 10 reps)</li><li>Week 3: Hit top (e.g. 12 reps) &rarr; increase weight</li></ul></div>
     <div class="r-card"><h3>Failure Rule</h3><ul><li>Set 1 &rarr; 2 reps in reserve</li><li>Set 2 &rarr; 1 rep in reserve</li><li>Last set &rarr; near failure</li><li>Never ALL sets to failure</li></ul></div>
     <div class="r-card"><h3>If You Fail</h3><ul><li>Reps drop: keep weight, build next session</li><li>Stuck 3 sessions: reduce 10% and rebuild</li></ul></div>
@@ -1341,145 +1336,129 @@ function renderRules(){
 }
 
 // ═══ TABS ═══
-const tabs=document.querySelectorAll('.tabs button'),panels={workout:document.getElementById('workoutTab'),history:document.getElementById('historyTab'),progress:document.getElementById('progressTab'),rules:document.getElementById('rulesTab')};
+const tabs=document.querySelectorAll('.tabs button'),panels={workout:$('workoutTab'),history:$('historyTab'),progress:$('progressTab'),rules:$('rulesTab')};
 function switchTab(n){
+  if(!panels[n])n='workout';
+  activeTab=n;
   tabs.forEach(t=>t.classList.toggle('on',t.dataset.tab===n));
-  Object.entries(panels).forEach(([k,p])=>{if(k==='workout')p.style.display=k===n?'block':'none';else{p.classList.toggle('vis',k===n);p.style.display=k===n?'':'none'}});
-  document.getElementById('cycleBar').style.display=n==='workout'?'flex':'none';
-  document.getElementById('bottomBar').style.display=n==='workout'?'block':'none';
-  if(n==='history')renderHistory();if(n==='progress')renderProgress();if(n==='rules')renderRules();if(n==='workout')renderWorkout();
+  Object.keys(panels).forEach(k=>{const p=panels[k];if(k==='workout')p.style.display=k===n?'block':'none';else{p.classList.toggle('vis',k===n);p.style.display=k===n?'':'none'}});
+  $('cycleBar').style.display=n==='workout'?'flex':'none';
+  $('bottomBar').style.display='none'; // renderWorkout shows it again when there is something to log
+  renderTab();
 }
 tabs.forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.tab)));
 
-// ═══ LOG SESSION ═══
-let _logLocked=false;
-document.getElementById('saveBtn').addEventListener('click',()=>{
-  if(_logLocked)return;
-  const sess=state.sessions[state.todaySession];if(!sess)return;
-  const cnt=sess.exercises.filter(e=>e.completed).length;
-  if(!cnt){showToast('Check off at least one exercise!');return}
-  const warns=validateSession(sess);if(warns.length){showToast(warns[0]);return}
-  showModal('Log Session',`Log ${cnt}/${sess.exercises.length} exercises and advance to next day?`,()=>{
-    _logLocked=true;
-    const next=state.currentCycleDay>=7?1:state.currentCycleDay+1;
-    if(next===1)state.cycleCount=(state.cycleCount||1)+1;
-    state.currentCycleDay=next;
-    initSession();saveState(true);
-    render();
-    const btn=document.getElementById('saveBtn');btn.textContent='SESSION LOGGED \u2713';btn.classList.add('saved');
-    showToast(`Logged! ${cnt}/${sess.exercises.length} exercises`);
-    setTimeout(()=>{_logLocked=false;btn.textContent='LOG SESSION';btn.classList.remove('saved')},2000);
-  },{confirmText:'Log it',positive:true});
-});
-
-// ═══ RESET ═══
-document.getElementById('resetBtn').addEventListener('click',()=>{showModal('Reset Session','Reset all checkmarks and values?',()=>{delete state.sessions[state.todaySession];initSession();saveState(true);render();showToast('Session reset')})});
-
-// ═══ EDIT PANEL ═══
-let editingDay=null;
+// ═══ EDIT PANEL (changes are a draft until SAVE CHANGES) ═══
+let editingDay=null,editDraft=null,editOriginal='';
+const normPlan=list=>list.map(x=>({n:String(x.n==null?'':x.n).trim(),s:parseInt(x.s)||0,r:String(x.r==null?'':x.r).trim(),rest:String(x.rest==null?'':x.rest).trim()||'-',w:parseFloat(x.w)||0,u:String(x.u==null?'kg':x.u),p:String(x.p==null?'':x.p).trim()}));
 function openEditPanel(day){
-  editingDay=day;document.getElementById('editTitle').textContent=`Edit Day ${day} — ${CYCLE[safeDay(day)-1].name}`;
-  document.getElementById('editErr').textContent='';renderEditExercises();document.getElementById('editPanel').classList.add('open');
+  editingDay=safeDay(day);editDraft=normPlan(getWorkouts(editingDay));editOriginal=JSON.stringify(editDraft);
+  $('editTitle').textContent=`Edit Day ${editingDay} — ${dayInfo(editingDay).name}`;
+  $('editErr').textContent='';renderEditExercises();$('editPanel').classList.add('open');
 }
-function closeEditPanel(){document.getElementById('editPanel').classList.remove('open');editingDay=null}
-document.getElementById('editClose').addEventListener('click',closeEditPanel);
-
+function closeEditPanel(){$('editPanel').classList.remove('open');editingDay=null;editDraft=null}
+function requestCloseEdit(){
+  if(!editDraft){closeEditPanel();return}
+  readEditDraft();
+  if(JSON.stringify(normPlan(editDraft))!==editOriginal)showModal('Discard Changes','Close without saving your edits?',closeEditPanel,{confirmText:'Discard'});
+  else closeEditPanel();
+}
+$('editClose').addEventListener('click',requestCloseEdit);
+// Pull whatever is typed in the form into the draft (unvalidated) so move/add/delete don't lose edits.
+function readEditDraft(){
+  $('editContent').querySelectorAll('.edit-ex').forEach((card,i)=>{
+    const d=editDraft[i];if(!d)return;
+    d.n=card.querySelector('[data-f="n"]').value;d.s=card.querySelector('[data-f="s"]').value;d.r=card.querySelector('[data-f="r"]').value;
+    d.rest=card.querySelector('[data-f="rest"]').value;d.w=card.querySelector('[data-f="w"]').value;d.u=card.querySelector('[data-f="u"]').value;d.p=card.querySelector('[data-f="p"]').value;
+  });
+}
 function renderEditExercises(){
-  const exs=getWorkouts(editingDay),c=document.getElementById('editContent'),len=exs.length;
-  c.innerHTML=exs.map((ex,i)=>`<div class="edit-ex" data-i="${i}">
+  const c=$('editContent'),len=editDraft.length;
+  c.innerHTML=editDraft.map((ex,i)=>`<div class="edit-ex" data-i="${i}">
     <div class="edit-ex-hdr">
       <div class="edit-move">
         <button class="edit-move-btn ${i===0?'dis':''}" data-i="${i}" data-dir="up" aria-label="Move up"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
         <button class="edit-move-btn ${i===len-1?'dis':''}" data-i="${i}" data-dir="down" aria-label="Move down"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
       </div>
-      <input type="text" value="${esc(ex.n)}" data-i="${i}" data-f="n" placeholder="Exercise name" maxlength="80">
+      <input type="text" value="${esc(ex.n)}" data-i="${i}" data-f="n" placeholder="Exercise name" maxlength="80" aria-label="Exercise name">
       <button class="edit-ex-del" data-i="${i}" aria-label="Delete exercise"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
     </div>
-    <div class="edit-row"><div><label>Sets</label><input type="number" value="${esc(''+ex.s)}" data-i="${i}" data-f="s" min="0" max="20" placeholder="3"></div><div><label>Reps</label><input type="text" value="${esc(ex.r)}" data-i="${i}" data-f="r" placeholder="8-12"></div><div><label>Rest</label><input type="text" value="${esc(ex.rest)}" data-i="${i}" data-f="rest" placeholder="60s"></div></div>
-    <div class="edit-row r2"><div><label>Weight</label><input type="number" value="${esc(''+ex.w)}" data-i="${i}" data-f="w" min="0" step="0.5"></div><div><label>Unit</label><select data-i="${i}" data-f="u"><option value="kg" ${ex.u==='kg'?'selected':''}>kg</option><option value="BW" ${ex.u==='BW'?'selected':''}>BW</option><option value="lbs" ${ex.u==='lbs'?'selected':''}>lbs</option><option value="" ${ex.u===''?'selected':''}>None</option></select></div></div>
+    <div class="edit-row"><div><label>Sets</label><input type="number" value="${esc(ex.s)}" data-i="${i}" data-f="s" min="0" max="20" placeholder="3"></div><div><label>Reps</label><input type="text" value="${esc(ex.r)}" data-i="${i}" data-f="r" placeholder="8-12" maxlength="20"></div><div><label>Rest</label><input type="text" value="${esc(ex.rest)}" data-i="${i}" data-f="rest" placeholder="60s" maxlength="10"></div></div>
+    <div class="edit-row r2"><div><label>Weight</label><input type="number" value="${esc(ex.w)}" data-i="${i}" data-f="w" min="0" step="0.5"></div><div><label>Unit</label><select data-i="${i}" data-f="u"><option value="kg" ${ex.u==='kg'?'selected':''}>kg</option><option value="BW" ${ex.u==='BW'?'selected':''}>BW</option><option value="lbs" ${ex.u==='lbs'?'selected':''}>lbs</option><option value="" ${ex.u===''?'selected':''}>None</option></select></div></div>
     <div class="edit-row"><div style="grid-column:1/-1"><label>Progression</label><input type="text" value="${esc(ex.p)}" data-i="${i}" data-f="p" placeholder="+5 kg when 12 reps" maxlength="80"></div></div>
   </div>`).join('');
-  // Move buttons
-  c.querySelectorAll('.edit-move-btn:not(.dis)').forEach(b=>{b.addEventListener('click',()=>{
-    const i=parseInt(b.dataset.i),dir=b.dataset.dir;
-    if(!state.customWorkouts)state.customWorkouts={};
-    const list=[...getWorkouts(editingDay)];
-    const j=dir==='up'?i-1:i+1;
-    if(j<0||j>=list.length)return;
-    [list[i],list[j]]=[list[j],list[i]];
-    state.customWorkouts[editingDay]=list;saveState(true);renderEditExercises();
-    // Scroll to the moved exercise's new position
-    const cards=document.getElementById('editContent').querySelectorAll('.edit-ex');
-    if(cards[j])cards[j].scrollIntoView({behavior:'smooth',block:'center'});
-  })});
-  // Delete buttons
-  c.querySelectorAll('.edit-ex-del').forEach(b=>{b.addEventListener('click',()=>{
-    const i=parseInt(b.dataset.i),exs=getWorkouts(editingDay);
-    if(exs.length<=1){document.getElementById('editErr').textContent='Add another exercise first.';return}
-    showModal('Delete Exercise',`Remove this exercise?`,()=>{if(!state.customWorkouts)state.customWorkouts={};const list=[...getWorkouts(editingDay)];list.splice(i,1);state.customWorkouts[editingDay]=list;saveState(true);renderEditExercises()});
-  })});
 }
-document.getElementById('editAdd').addEventListener('click',()=>{
-  if(!state.customWorkouts)state.customWorkouts={};const list=[...getWorkouts(editingDay)];
-  list.push({n:"New Exercise",s:3,r:"8-12",rest:"60s",w:0,u:"kg",p:""});
-  state.customWorkouts[editingDay]=list;saveState(true);renderEditExercises();
-  document.getElementById('editPanel').scrollTop=document.getElementById('editPanel').scrollHeight;
+$('editContent').addEventListener('click',e=>{
+  if(!editDraft)return;
+  const mv=e.target.closest('.edit-move-btn:not(.dis)');
+  if(mv){
+    readEditDraft();
+    const i=parseInt(mv.dataset.i),j=mv.dataset.dir==='up'?i-1:i+1;
+    if(j<0||j>=editDraft.length)return;
+    [editDraft[i],editDraft[j]]=[editDraft[j],editDraft[i]];
+    renderEditExercises();
+    const cards=$('editContent').querySelectorAll('.edit-ex');if(cards[j])cards[j].scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
+  const del=e.target.closest('.edit-ex-del');
+  if(del){
+    if(editDraft.length<=1){$('editErr').textContent='Add another exercise first.';return}
+    const i=parseInt(del.dataset.i);
+    showModal('Delete Exercise','Remove this exercise?',()=>{if(!editDraft)return;readEditDraft();editDraft.splice(i,1);$('editErr').textContent='';renderEditExercises()});
+  }
 });
-document.getElementById('editSave').addEventListener('click',()=>{
-  const c=document.getElementById('editContent'),errEl=document.getElementById('editErr');errEl.textContent='';
+$('editAdd').addEventListener('click',()=>{
+  if(!editDraft)return;
+  readEditDraft();editDraft.push({n:"New Exercise",s:3,r:"8-12",rest:"60s",w:0,u:"kg",p:""});renderEditExercises();
+  const panel=$('editPanel');panel.scrollTop=panel.scrollHeight;
+  const last=$('editContent').querySelector('.edit-ex:last-child [data-f="n"]');if(last){last.focus();last.select()}
+});
+$('editSave').addEventListener('click',()=>{
+  if(!editDraft)return;
+  const c=$('editContent'),errEl=$('editErr');errEl.textContent='';
   c.querySelectorAll('.inp-err').forEach(el=>el.classList.remove('inp-err'));c.querySelectorAll('.err-msg').forEach(el=>el.remove());
-  const newList=[];let hasErr=false;
-  c.querySelectorAll('.edit-ex').forEach(card=>{
-    const nI=card.querySelector('[data-f="n"]'),sI=card.querySelector('[data-f="s"]'),rI=card.querySelector('[data-f="r"]'),reI=card.querySelector('[data-f="rest"]'),wI=card.querySelector('[data-f="w"]'),uS=card.querySelector('[data-f="u"]'),pI=card.querySelector('[data-f="p"]');
-    const name=nI.value.trim(),sets=parseInt(sI.value)||0,reps=rI.value.trim(),rest=reI.value.trim()||'-',weight=parseFloat(wI.value)||0,unit=uS.value,prog=pI.value.trim();
-    if(!name){nI.classList.add('inp-err');hasErr=true;addErrMsg(nI,'Required')}
-    if(!reps){rI.classList.add('inp-err');hasErr=true;addErrMsg(rI,'Required')}
-    if(sets<0||sets>20){sI.classList.add('inp-err');hasErr=true;addErrMsg(sI,'0-20')}
-    if(weight<0){wI.classList.add('inp-err');hasErr=true;addErrMsg(wI,'Must be 0+')}
-    newList.push({n:name,s:sets,r:reps,rest,w:weight,u:unit,p:prog});
+  readEditDraft();
+  const newList=normPlan(editDraft);let hasErr=false;
+  c.querySelectorAll('.edit-ex').forEach((card,i)=>{
+    const ex=newList[i],nI=card.querySelector('[data-f="n"]'),sI=card.querySelector('[data-f="s"]'),rI=card.querySelector('[data-f="r"]'),wI=card.querySelector('[data-f="w"]');
+    if(!ex.n){nI.classList.add('inp-err');hasErr=true;addErrMsg(nI,'Required')}
+    if(!ex.r){rI.classList.add('inp-err');hasErr=true;addErrMsg(rI,'Required')}
+    if(ex.s<0||ex.s>20){sI.classList.add('inp-err');hasErr=true;addErrMsg(sI,'0-20')}
+    if(ex.w<0||ex.w>999){wI.classList.add('inp-err');hasErr=true;addErrMsg(wI,'0-999')}
   });
   if(hasErr){errEl.textContent='Fix errors above.';return}
-  if(!state.customWorkouts)state.customWorkouts={};state.customWorkouts[editingDay]=newList;
-  mergeSessionWithPlan(editingDay);saveState(true);initSession();render();closeEditPanel();showToast('Workout updated!');
+  if(!state.customWorkouts)state.customWorkouts={};
+  state.customWorkouts[editingDay]=newList;
+  initSession(); // re-align the active session with the new plan (typed data is kept by exercise name)
+  saveState(true);render();closeEditPanel();showToast('Workout updated!');
 });
 function addErrMsg(inp,msg){const el=document.createElement('div');el.className='err-msg';el.textContent=msg;inp.parentElement.appendChild(el)}
 
 // ═══ UTILS ═══
-function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2800)}
+let _toastTimer=null;
+function showToast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(_toastTimer);_toastTimer=setTimeout(()=>t.classList.remove('show'),2800)}
 let modalCb=null;
 function showModal(title,text,cb,opts){
-  document.getElementById('modalTitle').textContent=title;document.getElementById('modalText').textContent=text;
-  const btn=document.getElementById('modalConfirm');
+  $('modalTitle').textContent=title;$('modalText').textContent=text;
+  const btn=$('modalConfirm');
   btn.textContent=(opts&&opts.confirmText)||'Confirm';
   btn.className=(opts&&opts.positive)?'m-confirm-pos':'m-danger';
-  document.getElementById('modal').classList.add('show');modalCb=cb;
+  $('modal').classList.add('show');modalCb=cb;
 }
-document.getElementById('modalCancel').addEventListener('click',()=>{document.getElementById('modal').classList.remove('show');modalCb=null});
-document.getElementById('modalConfirm').addEventListener('click',()=>{document.getElementById('modal').classList.remove('show');if(modalCb)modalCb();modalCb=null});
-// Escape key closes modal and edit panel
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){
-  if(document.getElementById('modal').classList.contains('show')){document.getElementById('modal').classList.remove('show');modalCb=null}
-  else if(document.getElementById('editPanel').classList.contains('open')){closeEditPanel()}
-}});
-
-function validateSession(sess){
-  const w=[];sess.exercises.forEach(ex=>{if(ex.completed){
-    if(ex.sets&&ex.sets.length){
-      let hasAnyData=false;
-      ex.sets.forEach((s,si)=>{
-        if(s.weight||s.reps)hasAnyData=true;
-        if(s.weight&&(isNaN(parseFloat(s.weight))||parseFloat(s.weight)<0||parseFloat(s.weight)>999))w.push(`${ex.name} S${si+1}: invalid weight`);
-        if(s.reps&&(isNaN(parseInt(s.reps))||parseInt(s.reps)<0||parseInt(s.reps)>999))w.push(`${ex.name} S${si+1}: invalid reps`);
-      });
-      if(ex.unit!==''&&!hasAnyData)w.push(`${ex.name}: add data for at least one set`);
-    }
-  }});return w;
-}
-
+function hideModal(){$('modal').classList.remove('show');modalCb=null}
+$('modalCancel').addEventListener('click',hideModal);
+$('modalConfirm').addEventListener('click',()=>{const cb=modalCb;hideModal();if(cb)cb()});
+$('modal').addEventListener('click',e=>{if(e.target===e.currentTarget)hideModal()}); // tap outside to cancel
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
+  if($('modal').classList.contains('show'))hideModal();
+  else if($('editPanel').classList.contains('open'))requestCloseEdit();
+});
 function fmtRest(r){if(!r||r==='-')return r;const n=parseInt(r);if(isNaN(n))return r;if(n>=120)return(n/60)+'min';if(n>=60)return Math.floor(n/60)+':'+(''+(n%60)).padStart(2,'0');return r}
-function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
-function render(){renderCycle();renderWorkout()}
-document.getElementById('copyYear').textContent=new Date().getFullYear();
+const ESC_MAP={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+function esc(s){return s==null?'':String(s).replace(/[&<>"']/g,c=>ESC_MAP[c])}
+$('copyYear').textContent=new Date().getFullYear();
+
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 </script>
 </body>
 </html>

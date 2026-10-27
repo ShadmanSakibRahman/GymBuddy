@@ -18,3 +18,16 @@ I built this to track my own gym sessions — log what I lift, see what I did la
 - Sign in with Google or email — data syncs to the cloud
 
 I made it for myself, but the plan is fully customizable so anyone can use it for their own routine.
+
+---
+
+**Development**
+
+Everything lives in `index.html`. Tests need only Node (no dependencies):
+
+```
+node tests/test_session.js   # session logic: nothing is logged until LOG SESSION, refresh keeps typed numbers
+node tests/test_more.js      # migration, multi-device merge, per-account storage, plan edits, import
+node tests/e2e.js            # drives the real app in headless Chrome/Edge (needs internet for the Firebase SDK)
+```
+
